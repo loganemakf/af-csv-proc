@@ -92,8 +92,6 @@ class MainWindow:
             else:
                 # print filename in Entry field next to 'Save' button
                 self._entry_box_message(f)
-                # TODO: proc button should be enabled after setting verification
-                # self.proc_button.state(["!disabled"])
                 self.sett_button.state(["!disabled"])
         except RuntimeError:
             self._entry_box_message("No file selected")
@@ -130,7 +128,11 @@ class MainWindow:
 
 
     def opensettings(self):
-        SettingsWindow(self.window, self.processor, self.src_path)
+        SettingsWindow(self.window, self.processor, self.src_path, self.enable_proc_button)
+
+
+    def enable_proc_button(self):
+        self.proc_button.state(["!disabled"])
 
 
     #TODO: figure out why this doesn't fix the error mssgs on application quit
