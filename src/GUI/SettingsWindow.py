@@ -10,9 +10,10 @@ from src.csvproc.csvproc import CSVProc
 
 class SettingsWindow:
 
-    def __init__(self, main_window, processor: CSVProc, source_path: str):
+    def __init__(self, main_window, processor: CSVProc, source_path: str, call_on_save_success):
         self.processor = processor
         self.window = Toplevel(main_window)
+        self._save_success_callback = call_on_save_success
         self.window.title("CSV Display GUI, beta 1")
         # root.resizable(FALSE, FALSE)
 
@@ -296,6 +297,9 @@ class SettingsWindow:
 
         with open(self.settings_filename, "w") as config_file:
             json.dump(config_data, config_file, indent=4)
+
+        # enable "process" button in main window
+        self._save_success_callback()
 
         self.window.destroy()
 
