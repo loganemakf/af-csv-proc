@@ -15,10 +15,34 @@ class SettingsWindow:
         self.window = Toplevel(main_window)
         self.window.title("CSV Display GUI, beta 1")
         # root.resizable(FALSE, FALSE)
-        self.heading_popup_isopen = False
 
         self.settings_filename = "config.json"
         self.source_path = source_path
+        self.heading_popup_isopen = False
+
+        self._setup_GUI()
+
+        self.unused_headers = self.processor.af_headers
+        self.used_headers = set()
+        self.processor.src_path = self.source_path
+
+        self._populate_table()
+
+        # load settings from previously opened settings window and/or "sticky"
+        # configuration settings from config.json file.
+        if self._load_settings():
+            print("Settings load successful")
+        else:
+            print("Settings load failed :(")
+
+        # add some padding around each UI element in mainframe
+        for child in self.mainframe.winfo_children():
+            child.grid_configure(padx=5, pady=5)
+
+        self.window.mainloop()
+
+
+    def _setup_GUI(self):
         self.last_click_x = -1
         self.last_click_y = -1
 
@@ -62,38 +86,35 @@ class SettingsWindow:
         self.frame_condition.rowconfigure(0, weight=1)
         self.frame_condition.rowconfigure(1, weight=1)
 
-        self.conditionReport = Text(self.frame_condition, width=60, height=6, state="disabled")
-        self.conditionReport.grid(row=1, column=0, sticky=W)
-        self.using_bp_condition = StringVar()
-        self.chbox_bpCondition = ttk.Checkbutton(self.frame_condition,
-                                                 text="Use boilerplate condition report for all lots",
-                                                 variable=self.using_bp_condition, command=self._bpcond, onvalue="yes",
-                                                 offvalue="no")
-        self.chbox_bpCondition.grid(row=0, column=0, sticky=W)
+        self.condition_report_text = Text(self.frame_condition, width=60, height=6, state="disabled")
+        self.condition_report_text.grid(row=1, column=0, sticky=W)
+        self.using_bp_cond_str = StringVar()
+        self.chkbox_bp_cond = ttk.Checkbutton(self.frame_condition,
+                                              text="Use boilerplate condition report for all lots",
+                                              variable=self.using_bp_cond_str, command=self._bpcond, onvalue="yes",
+                                              offvalue="no")
+        self.chkbox_bp_cond.grid(row=0, column=0, sticky=W)
 
         self.btn_save = ttk.Button(self.settingsFrame, text="Save", command=lambda: self._save_settings())
         self.btn_save.grid(row=0, column=1, sticky=(N, E))
 
-        #TODO: might not want default 'close' behavior to be 'save settings'... change this or the saveBtn callback
-        #self.window.protocol("WM_DELETE_WINDOW", lambda: self._save_settings())
+        # TODO: might not want default 'close' behavior to be 'save settings'... change this or the saveBtn callback
+        # self.window.protocol("WM_DELETE_WINDOW", lambda: self._save_settings())
         self.window.bind('<Button-1>', self._get_click_xy)
 
-        self.unused_headers = self.processor.af_headers
-        self.used_headers = set()
-        self.processor.src_path = self.source_path
 
+    def _populate_table(self):
         data = self.processor.get_n_rows(4)
 
         column_names = []
-        self.num_columns = len(data[1])
-        for col in range(self.num_columns):
+        for col in range(self.processor.file_num_cols):
             column_names.append(f"col{col}")
 
         self.table["columns"] = column_names
 
         self.table.column("#0", width=30, stretch=FALSE)
 
-        for col in range(self.num_columns):
+        for col in range(self.processor.file_num_cols):
             self.table.heading(col, command=lambda c=col: self.set_col_header(c))
 
         row_num = 1
@@ -101,35 +122,26 @@ class SettingsWindow:
             self.table.insert('', "end", text=f'({row_num})', values=r)
             row_num += 1
 
-        for col in range(self.num_columns):
+        for col in range(self.processor.file_num_cols):
             # look at the lengths of each value in the first row of the csv to set column width accordingly
             if len(data[1][col].strip()) < 10:
                 self.table.column(col, width=55, minwidth=55, stretch=FALSE)
             else:
                 self.table.column(col, minwidth=100, width=100)
 
-        # load settings from previously opened settings window and/or "sticky"
-        # configuration settings from config.json file.
-        self._load_settings()
-
-        # add some padding around each UI element in mainframe
-        for child in self.mainframe.winfo_children():
-            child.grid_configure(padx=5, pady=5)
-
-        self.window.mainloop()
-
 
     def _load_settings(self):
         # load table headers from CSVProc instance
         table_headers = self.processor.file_headers
 
-        if len(table_headers) != self.num_columns:
+        if len(table_headers) != self.processor.file_num_cols:
             # mismatch between number of headers in processor and num columns in table
-            return False
+            # return False
+            pass
         elif len(table_headers) != 0:
             #TODO: I'm sure this could be done neater with an iterator of some sort
             h = 0
-            for c in range(self.num_columns):
+            for c in range(self.processor.file_num_cols):
                 self.table.heading(c, text=table_headers[h])
                 h += 1
 
@@ -138,15 +150,20 @@ class SettingsWindow:
             config_data = json.load(sf)
 
         try:
+            # enable text box for a moment in order to insert loaded condition text
+            self.condition_report_text['state'] = 'normal'
+            self.condition_report_text.insert(1.0, config_data["bp_condition"])
+
             # convert boolean from config file to "yes"/"no" for checkbox variable
             if config_data["using_bp_condition"]:
-                self.using_bp_condition.set("yes")
+                self.using_bp_cond_str.set("yes")
                 self._bpcond()
             else:
-                self.using_bp_condition.set("no")
+                self.using_bp_cond_str.set("no")
                 self._bpcond()
 
-            self.conditionReport.insert(1.0, config_data["bp_condition"])
+            print("BP Condition textbox should NOT be empty now")
+            print(f'(should contain: {config_data["bp_condition"]})')
         except KeyError:
             # config file not what we expected?
             print("Error loading config file: key not found.")
@@ -231,41 +248,37 @@ class SettingsWindow:
 
 
     def _bpcond(self):
-        if self.using_bp_condition.get() == "yes":
-            self.conditionReport['state'] = 'normal'
+        if self.using_bp_cond_str.get() == "yes":
+            self.condition_report_text['state'] = 'normal'
         else:
-            self.conditionReport['state'] = 'disabled'
+            self.condition_report_text['state'] = 'disabled'
 
 
     def get_table_headers(self) -> list:
         column_headers = []
 
-        for c in range(self.num_columns):
+        for c in range(self.processor.file_num_cols):
             heading = self.table.heading(c, option="text")
-            #TODO: not so sure this "BPCondition" thing is the best plan... maybe just let CSVProc know that we're
-            # using_bp_condition and let it handle the substitution
-            if heading == "Condition" and self.using_bp_condition.get() == "yes":
-                column_headers.append("BPCondition")
-            else:
-                column_headers.append(heading)
+            column_headers.append(heading)
         #TODO: no need to print this
         print(column_headers)
         return column_headers
 
 
     def get_bp_condition_text(self) -> str:
-        return self.conditionReport.get(1.0, END).strip()
+        return self.condition_report_text.get(1.0, END).strip()
 
 
     def _save_settings(self):
         # save current settings to CSVProc object
         try:
+            self._validate_settings()
             self.processor.set_file_col_headers(self.get_table_headers())
         except RuntimeError as e:
             self._display_errorbox(f"Save error: {e}")
             return
 
-        using_bp_cond_bool = True if self.using_bp_condition.get() == "yes" else False
+        using_bp_cond_bool = True if self.using_bp_cond_str.get() == "yes" else False
 
         self.processor.using_bp_condition = using_bp_cond_bool
         self.processor.bp_condition = self.get_bp_condition_text()
@@ -279,6 +292,7 @@ class SettingsWindow:
             config_data["using_bp_condition"] = False
 
         config_data["bp_condition"] = self.get_bp_condition_text()
+        print(f'BP condition text (writing to json): {config_data["bp_condition"]}')
 
         with open(self.settings_filename, "w") as config_file:
             json.dump(config_data, config_file, indent=4)
@@ -288,12 +302,12 @@ class SettingsWindow:
 
     def _validate_settings(self):
         # make sure every column is labeled with a header
-        for c in range(self.num_columns):
+        for c in range(self.processor.file_num_cols):
             if not self.table.heading(c, option="text").strip():
                 raise RuntimeError("Unlabeled column header")
 
         # if BP Condition checkbox is checked, make sure text box has some text in it
-        if self.using_bp_condition.get() == "yes" and not self.get_bp_condition_text():
+        if self.using_bp_cond_str.get() == "yes" and not self.get_bp_condition_text():
             raise RuntimeError("Boilerplate condition report empty")
 
         # if all tests passed, return true
