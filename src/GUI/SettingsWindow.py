@@ -6,39 +6,36 @@ from tkinter import messagebox
 import os.path
 
 from src.csvproc.csvproc import CSVProc
+from src import CONF
 
 
 class SettingsWindow:
 
-    def __init__(self, main_window, processor: CSVProc, source_path: str, call_on_save_success):
-        self.processor = processor
+    def __init__(self, main_window, processor: CSVProc, source_path: str, *, save_success_callback):
         self.window = Toplevel(main_window)
-        self._save_success_callback = call_on_save_success
+        self.processor = processor
+        self._save_success_callback = save_success_callback
         self.window.title("CSV Display GUI, beta 1")
-        # root.resizable(FALSE, FALSE)
-
         self.settings_filename = "config.json"
         self.source_path = source_path
         self.heading_popup_isopen = False
 
         self._setup_GUI()
 
+        # get the set of available column headers from the processor
         self.unused_headers = self.processor.af_headers
         self.used_headers = set()
         self.processor.src_path = self.source_path
 
         self._populate_table()
 
+        # TODO: print to somewhere else
         # load settings from previously opened settings window and/or "sticky"
         # configuration settings from config.json file.
         if self._load_settings():
             print("Settings load successful")
         else:
             print("Settings load failed :(")
-
-        # add some padding around each UI element in mainframe
-        for child in self.mainframe.winfo_children():
-            child.grid_configure(padx=5, pady=5)
 
         self.window.mainloop()
 
@@ -56,68 +53,129 @@ class SettingsWindow:
         # TODO: change x var to 'x' (not 100)
         self.window.geometry("%dx%d+%d+%d" % (width, height, 100, y))
 
-        self.mainframe = ttk.Frame(self.window, padding="10 5")
-        self.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))
+        self.main_frame = ttk.Frame(self.window, padding="10 5")
+        self.main_frame.grid(column=0, row=0, sticky=(N, W, E, S))
         self.window.columnconfigure(0, weight=1)
         self.window.rowconfigure(0, weight=1)
-        self.mainframe.columnconfigure(0, weight=1)
-        self.mainframe.rowconfigure(0, weight=1)
-        self.mainframe.rowconfigure(1, weight=1)
-        self.tableFrame = ttk.Frame(self.mainframe)
-        self.tableFrame.grid(row=0, column=0, sticky=(N, W, E, S))
-        self.tableFrame.columnconfigure(0, weight=1)
-        self.tableFrame.rowconfigure(0, weight=1)
-        self.tableFrame.rowconfigure(1, weight=1)
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(0, weight=1)
+        self.main_frame.rowconfigure(1, weight=1)
+        self.table_frame = ttk.Frame(self.main_frame)
+        self.table_frame.grid(row=0, column=0, sticky=(N, W, E, S))
+        self.table_frame.columnconfigure(0, weight=1)
+        self.table_frame.rowconfigure(0, weight=1)
+        self.table_frame.rowconfigure(1, weight=1)
+        self.table_frame.rowconfigure(2, weight=1)
 
-        self.table = ttk.Treeview(self.tableFrame, padding=(5, 5, 5, 5), height=4)
-        self.table.grid(row=0, column=0, sticky=(S, W, E))
-        self.scb = ttk.Scrollbar(self.tableFrame, orient=HORIZONTAL, command=self.table.xview)
-        self.scb.grid(row=1, column=0, sticky=(N, W, E))
-        self.table.configure(xscrollcommand=self.scb.set)
+        self.table_instruct_lbl = ttk.Label(self.table_frame, text="Double-click column header cells to assign column names")
+        self.table_instruct_lbl.grid(row=0, column=0, sticky=(N, W))
+        self.table = ttk.Treeview(self.table_frame, padding=(5, 5, 5, 5), height=4)
+        self.table.grid(row=1, column=0, sticky=(S, W, E))
+        self.table_scrollbar = ttk.Scrollbar(self.table_frame, orient=HORIZONTAL, command=self.table.xview)
+        self.table_scrollbar.grid(row=2, column=0, sticky=(N, W, E))
+        self.table.configure(xscrollcommand=self.table_scrollbar.set)
 
-        self.settingsFrame = ttk.Frame(self.mainframe)
-        self.settingsFrame.grid(row=1, column=0, sticky=(N, W, E, S))
-        self.settingsFrame.columnconfigure(0, weight=1)
-        self.settingsFrame.columnconfigure(1, weight=1)
-        self.settingsFrame.rowconfigure(0, weight=1)
+        self.settings_frame = ttk.Frame(self.main_frame)
+        self.settings_frame.grid(row=1, column=0, sticky=(N, W, E, S))
+        self.settings_frame.columnconfigure(0, weight=1)
+        self.settings_frame.columnconfigure(1, weight=1)
+        self.settings_frame.rowconfigure(0, weight=1)
 
-        self.frame_condition = ttk.LabelFrame(self.settingsFrame, text="Condition Reports", padding=5)
-        self.frame_condition.grid(sticky=(N, W))
-        self.frame_condition.columnconfigure(0, weight=1)
-        self.frame_condition.rowconfigure(0, weight=1)
-        self.frame_condition.rowconfigure(1, weight=1)
+        self.condition_frame = ttk.LabelFrame(self.settings_frame, text="Condition Reports", padding=5)
+        self.condition_frame.grid(sticky=(N, W))
+        self.condition_frame.columnconfigure(0, weight=1)
+        self.condition_frame.rowconfigure(0, weight=1)
+        self.condition_frame.rowconfigure(1, weight=1)
 
-        self.condition_report_text = Text(self.frame_condition, width=60, height=6, state="disabled")
-        self.condition_report_text.grid(row=1, column=0, sticky=W)
+        self.condition_report_txt = Text(self.condition_frame, width=60, height=8, state="disabled")
+        self.condition_report_txt.grid(row=1, column=0, sticky=W)
         self.using_bp_cond_str = StringVar()
-        self.chkbox_bp_cond = ttk.Checkbutton(self.frame_condition,
-                                              text="Use boilerplate condition report for all lots",
-                                              variable=self.using_bp_cond_str, command=self._bpcond, onvalue="yes",
-                                              offvalue="no")
-        self.chkbox_bp_cond.grid(row=0, column=0, sticky=W)
+        self.boiler_cond_chkbx = ttk.Checkbutton(self.condition_frame,
+                                                 text="Use boilerplate condition report for all lots",
+                                                 variable=self.using_bp_cond_str, command=self._boiler_cond_toggled, onvalue="yes",
+                                                 offvalue="no")
+        self.boiler_cond_chkbx.grid(row=0, column=0, sticky=W)
 
-        self.btn_save = ttk.Button(self.settingsFrame, text="Save", command=lambda: self._save_settings())
-        self.btn_save.grid(row=0, column=1, sticky=(N, E))
+        self.options_frame = ttk.Frame(self.settings_frame)
+        self.options_frame.grid(row=0, column=1, sticky=(N, E, S, W), pady=(10,0))
+        self.options_frame.columnconfigure(0, weight=1)
+        self.options_frame.rowconfigure(0, weight=1)
+        self.options_frame.rowconfigure(1, weight=1)
+        self.startbid_frame = ttk.Frame(self.options_frame)
+        self.startbid_frame.grid(row=0, column=0, sticky=(N, W, E))
+        self.startbid_frame.columnconfigure(0, weight=1)
+        self.startbid_frame.rowconfigure(0, weight=1)
+        self.startbid_frame.rowconfigure(1, weight=1)
+
+        self.calc_startbid_var = StringVar()
+        self.calc_startbid_chkbx = ttk.Checkbutton(self.startbid_frame,
+                                                   text="Calculate StartBid as half of LoEst",
+                                                   variable=self.calc_startbid_var, command=self._calc_startbid_toggled,
+                                                   onvalue="yes", offvalue="no")
+        self.calc_startbid_chkbx.grid(row=0, column=0, sticky=W)
+        self.calc_empty_startbids_var = StringVar()
+        self.calc_empty_startbids_chkbx = ttk.Checkbutton(self.startbid_frame,
+                                                          text="Only calculate for lots without set StartBid",
+                                                          variable=self.calc_empty_startbids_var,
+                                                          command=self._calc_empty_startbids_toggled,
+                                                          onvalue="yes", offvalue="no", state="disabled")
+        self.calc_empty_startbids_chkbx.grid(row=1, column=0, sticky=W, padx=(20, 0))
+
+        self.save_btn = ttk.Button(self.options_frame, text="Save", command=lambda: self._save_settings())
+        self.save_btn.grid(row=1, column=0, sticky=(S, E))
 
         # TODO: might not want default 'close' behavior to be 'save settings'... change this or the saveBtn callback
         # self.window.protocol("WM_DELETE_WINDOW", lambda: self._save_settings())
         self.window.bind('<Button-1>', self._get_click_xy)
 
+        # add some padding around each UI element in mainframe
+        for child in self.main_frame.winfo_children():
+            child.grid_configure(padx=5, pady=5)
+
+
+    def _boiler_cond_toggled(self):
+        if self.using_bp_cond_str.get() == "yes":
+            self.condition_report_txt['state'] = 'normal'
+        else:
+            self.condition_report_txt['state'] = 'disabled'
+
+
+    def _calc_startbid_toggled(self):
+        if self.calc_startbid_var.get() == "yes":
+            self.calc_empty_startbids_chkbx['state'] = 'normal'
+        else:
+            self.calc_empty_startbids_chkbx['state'] = 'disabled'
+
+
+    # TODO: implement
+    def _calc_empty_startbids_toggled(self):
+        if self.calc_empty_startbids_var.get() == "yes":
+            pass
+        else:
+            pass
+
 
     def _populate_table(self):
+        """Fills the treeview (table) with data from first 4 lines of processor's file.
+        """
         data = self.processor.get_n_rows(4)
 
+        # this step creates the columns of the table;
+        # column names are for internal reference (not displayed anywhere)
         column_names = []
         for col in range(self.processor.file_num_cols):
             column_names.append(f"col{col}")
 
         self.table["columns"] = column_names
 
+        # column '#0' is a special column containing row numbers
         self.table.column("#0", width=30, stretch=FALSE)
 
+        # set headers (if previously defined) for each column of the table
         for col in range(self.processor.file_num_cols):
             self.table.heading(col, command=lambda c=col: self.set_col_header(c))
 
+        # place row numbers in column '#0'
         row_num = 1
         for r in data:
             self.table.insert('', "end", text=f'({row_num})', values=r)
@@ -131,14 +189,92 @@ class SettingsWindow:
                 self.table.column(col, minwidth=100, width=100)
 
 
+    def set_col_header(self, colNum):
+        """Creates a popup prompt for user to select a column header from the list.
+
+        Args:
+            colNum: the index of the treeview (table) column to set the header for.
+        """
+        if self.heading_popup_isopen:
+            return
+
+        # prevent multiple heading-set popups from being open at once
+        self.heading_popup_isopen = True
+        popup = Toplevel(self.window)
+        popup.title("Set col. header:")
+        popup.attributes("-topmost", TRUE)  # keep popup on top of settings window
+        popup.protocol("WM_DELETE_WINDOW", lambda p=popup: self._release_popup_lock(p))
+
+        # place the popup approximately over the specified col header
+        #   to enable "double click to set"-like behavior
+        root_geom = self.window.geometry()
+        popup_geom = root_geom[root_geom.find('+'):].split('+')[1:]
+        #TODO: maybe make this a little less magic-numbery?
+        popup.geometry(f"+{int(popup_geom[0]) + self.last_click_x - 75}+{int(popup_geom[1]) + self.last_click_y + 15}")
+        popup.resizable(FALSE, FALSE)
+        popup.lift(self.window)
+
+        # create the dropdown menu for header selection
+        header_var = StringVar()
+        header = ttk.Combobox(popup, textvariable=header_var)
+        header["values"] = sorted(list(self.unused_headers), key=str.lower)
+        header.state(["readonly"])
+        header.bind("<<ComboboxSelected>>",
+                    lambda _, c=colNum, h=header_var, p=popup: self._set_col_header_helper(column=c, header=h,
+                                                                                          popup=p))
+        header.grid()
+
+
+    def _set_col_header_helper(self, *, column: int, header: StringVar, popup: Toplevel):
+        """Sets treeview column header text based on parameters.
+        Function is called when a header is selected from the popup's dropdown.
+        Sets of used/unused headers are also maintained here.
+
+        Args:
+            column: the index for the column to modify.
+            header: var containing user's header selection from popup dropdown.
+            popup: handle to the popup window object itself.
+        """
+        #
+        headerText = header.get()
+        ht = self.table.heading(column, option="text")
+
+        # if there is a header already assigned to the specified column,
+        #   add it back to the unused_headers set.
+        if len(ht) > 1:
+            self.unused_headers.add(ht)
+
+        # header "None" doesn't behave like the other headers in that it shouldn't be removed
+        #   when selected (to avoid "gridlock" when all columns have headers assigned)
+        if headerText != "[None]":
+            self.table.heading(column, text=headerText)
+            self.unused_headers.remove(headerText)
+            self.used_headers.add(headerText)
+        else:
+            # when changing a header to "None", it's existing text should be
+            # added back into the set of unusedHeaders
+            self.table.heading(column, text="")
+
+        popup.destroy()
+        self.heading_popup_isopen = False   # allow new popups to spawn
+
+
+    def _release_popup_lock(self, popup):
+        popup.destroy()
+        self.heading_popup_isopen = False
+
+
     def _load_settings(self):
+        """Loads saved configuration from file.
+
+        Returns: True if load was successful, False if not.
+        """
         # load table headers from CSVProc instance
         table_headers = self.processor.file_headers
 
         if len(table_headers) != self.processor.file_num_cols:
             # mismatch between number of headers in processor and num columns in table
-            # return False
-            pass
+            return False
         elif len(table_headers) != 0:
             #TODO: I'm sure this could be done neater with an iterator of some sort
             h = 0
@@ -151,22 +287,20 @@ class SettingsWindow:
             config_data = json.load(sf)
 
         try:
-            # enable text box for a moment in order to insert loaded condition text
-            self.condition_report_text['state'] = 'normal'
-            self.condition_report_text.insert(1.0, config_data["bp_condition"])
+            # enable text box for a moment in order to insert loaded boilerplate condition text
+            self.condition_report_txt['state'] = 'normal'
+            self.condition_report_txt.insert(1.0, config_data["bp_condition"])
 
             # convert boolean from config file to "yes"/"no" for checkbox variable
             if config_data["using_bp_condition"]:
                 self.using_bp_cond_str.set("yes")
-                self._bpcond()
+                self._boiler_cond_toggled()
             else:
                 self.using_bp_cond_str.set("no")
-                self._bpcond()
-
-            print("BP Condition textbox should NOT be empty now")
-            print(f'(should contain: {config_data["bp_condition"]})')
+                self._boiler_cond_toggled()
         except KeyError:
             # config file not what we expected?
+            # TODO: replace with error message printed to mainwindow or _display_errorbox
             print("Error loading config file: key not found.")
             return False
 
@@ -174,104 +308,16 @@ class SettingsWindow:
         return True
 
 
-    def peek_first_rows(self, path: str) -> list:
-        lot_data = []
-
-        with open(path, "r", encoding="latin-1", newline="") as af_file:
-            reader = csv.reader(af_file)
-            lineCount = 0
-            for line in reader:
-                if lineCount < 4:
-                    lineCount += 1
-                    lot_data.append(line)
-                else:
-                    break
-
-        return lot_data
-
-
     def _get_click_xy(self, event):
         self.last_click_x = event.x
         self.last_click_y = event.y
 
 
-    def _release_popup_lock(self, popup):
-        popup.destroy()
-        self.heading_popup_isopen = False
-
-
-    def set_col_header(self, colNum):
-        if self.heading_popup_isopen:
-            return
-
-        self.heading_popup_isopen = True
-        popup = Toplevel(self.window)
-        popup.title("Set col. header:")
-        popup.attributes("-topmost", TRUE)
-        popup.protocol("WM_DELETE_WINDOW", lambda p=popup: self._release_popup_lock(p))
-
-        root_geom = self.window.geometry()
-        popup_geom = root_geom[root_geom.find('+'):].split('+')[1:]
-        #TODO: maybe make this a little less magic-numbery?
-        popup.geometry(f"+{int(popup_geom[0]) + self.last_click_x - 75}+{int(popup_geom[1]) + self.last_click_y + 15}")
-        popup.resizable(FALSE, FALSE)
-        popup.lift(self.window)
-
-        headerVar = StringVar()
-        header = ttk.Combobox(popup, textvariable=headerVar)
-        header["values"] = sorted(list(self.unused_headers), key=str.lower)
-        header.state(["readonly"])
-        header.bind("<<ComboboxSelected>>",
-                    lambda _, c=colNum, h=headerVar, p=popup: self._set_col_header_helper(_, column=c, header=h,
-                                                                                         popup=p))
-        header.grid()
-
-
-    def _set_col_header_helper(self, *args, column, header, popup):
-        headerText = header.get()
-        # "None" doesn't behave like the other options in that it shouldn't
-        # be removed when selected (to avoid deadlocking the selected fields)
-        ht = self.table.heading(column, option="text")
-        if len(ht) > 1:
-            self.unused_headers.add(ht)
-
-        if headerText != "[None]":
-            self.table.heading(column, text=headerText)
-            self.unused_headers.remove(headerText)
-            self.used_headers.add(headerText)
-        else:
-            # when changing a header to "None", it's existing text should be
-            # added back into the set of unusedHeaders
-            self.table.heading(column, text="")
-
-        popup.destroy()
-        self.heading_popup_isopen = False
-
-
-    def _bpcond(self):
-        if self.using_bp_cond_str.get() == "yes":
-            self.condition_report_text['state'] = 'normal'
-        else:
-            self.condition_report_text['state'] = 'disabled'
-
-
-    def get_table_headers(self) -> list:
-        column_headers = []
-
-        for c in range(self.processor.file_num_cols):
-            heading = self.table.heading(c, option="text")
-            column_headers.append(heading)
-        #TODO: no need to print this
-        print(column_headers)
-        return column_headers
-
-
-    def get_bp_condition_text(self) -> str:
-        return self.condition_report_text.get(1.0, END).strip()
-
-
     def _save_settings(self):
-        # save current settings to CSVProc object
+        """Saves current settings to CSVProc processor & config file (where appropriate).
+
+        Returns: nothing (but SettingsWindow is destroyed)
+        """
         try:
             self._validate_settings()
             self.processor.set_file_col_headers(self.get_table_headers())
@@ -281,19 +327,13 @@ class SettingsWindow:
 
         using_bp_cond_bool = True if self.using_bp_cond_str.get() == "yes" else False
 
+        # set processor member vars to local values
         self.processor.using_bp_condition = using_bp_cond_bool
         self.processor.bp_condition = self.get_bp_condition_text()
 
         # additionally, save reusable settings to config file (for next time)
-        config_data = {}
-
-        if using_bp_cond_bool:
-            config_data["using_bp_condition"] = True
-        else:
-            config_data["using_bp_condition"] = False
-
-        config_data["bp_condition"] = self.get_bp_condition_text()
-        print(f'BP condition text (writing to json): {config_data["bp_condition"]}')
+        config_data = {CONF.USING_BP_COND: using_bp_cond_bool,
+                       CONF.BP_COND: self.get_bp_condition_text()}
 
         with open(self.settings_filename, "w") as config_file:
             json.dump(config_data, config_file, indent=4)
@@ -305,10 +345,15 @@ class SettingsWindow:
 
 
     def _validate_settings(self):
+        """Checks validity/compatibility of various settings.
+        Errors are indicated with the raising of RuntimeErrors.
+
+        Returns: True if all validation tests succeed.
+        """
         # make sure every column is labeled with a header
         for c in range(self.processor.file_num_cols):
             if not self.table.heading(c, option="text").strip():
-                raise RuntimeError("Unlabeled column header")
+                raise RuntimeError("Unlabeled column header(s)")
 
         # if BP Condition checkbox is checked, make sure text box has some text in it
         if self.using_bp_cond_str.get() == "yes" and not self.get_bp_condition_text():
@@ -316,6 +361,21 @@ class SettingsWindow:
 
         # if all tests passed, return true
         return True
+
+
+    def get_bp_condition_text(self) -> str:
+        # just a wrapper for some ugly syntax
+        return self.condition_report_txt.get(1.0, END).strip()
+
+
+    def get_table_headers(self) -> list:
+        column_headers = []
+
+        for c in range(self.processor.file_num_cols):
+            heading = self.table.heading(c, option="text")
+            column_headers.append(heading)
+
+        return column_headers
 
 
     def _display_errorbox(self, text):
