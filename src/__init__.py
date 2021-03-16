@@ -1,6 +1,9 @@
 # PROGRAM CONSTANTS
 # -----------------
 # Config file dictionary keys
+class C:
+    PROGRAM_NAME = "AF .csv Processor v0.1"
+
 class CONF:
     BP_COND = "bp_condition"
     USING_BP_COND = "using_bp_condition"
