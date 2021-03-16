@@ -5,6 +5,7 @@ import os.path
 
 from src.GUI.SettingsWindow import SettingsWindow
 from src.csvproc.csvproc import CSVProc
+from src import C
 
 
 class MainWindow:
@@ -12,7 +13,7 @@ class MainWindow:
     def __init__(self, root: Tk, processor: CSVProc):
         self.processor = processor
         self.window = root
-        self.window.title("Auction .csv Processor GUI v0.1")
+        self.window.title(f"{C.PROGRAM_NAME}")
         self.window.resizable(FALSE, FALSE)
         self.src_path = ""
         self.dest_path = ""
