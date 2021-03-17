@@ -143,16 +143,17 @@ class SettingsWindow:
     def _calc_startbid_toggled(self):
         if self.calc_startbid_var.get() == "yes":
             self.calc_empty_startbids_chkbx['state'] = 'normal'
+            self.processor.calc_startbid = True
         else:
             self.calc_empty_startbids_chkbx['state'] = 'disabled'
+            self.processor.calc_startbid = False
 
 
-    # TODO: implement
     def _calc_empty_startbids_toggled(self):
         if self.calc_empty_startbids_var.get() == "yes":
-            pass
+            self.processor.calc_empty_startbids = True
         else:
-            pass
+            self.processor.calc_empty_startbids = False
 
 
     def _populate_table(self):
