@@ -150,7 +150,7 @@ class SettingsWindow:
 
 
     def _calc_empty_startbids_toggled(self):
-        if self.calc_empty_startbids_var.get() == "yes":
+        if self.calc_startbid_var.get() == "yes" and self.calc_empty_startbids_var.get() == "yes":
             self.processor.calc_empty_startbids = True
         else:
             self.processor.calc_empty_startbids = False
@@ -270,11 +270,12 @@ class SettingsWindow:
 
         Returns: True if load was successful, False if not.
         """
-        # load table headers from CSVProc instance
+        # load table headers from processor
         table_headers = self.processor.file_headers
 
-        if len(table_headers) != self.processor.file_num_cols:
+        if len(table_headers) != self.processor.file_num_cols and len(table_headers) != 0:
             # mismatch between number of headers in processor and num columns in table
+            print(f"Len table headers {len(table_headers)}; file_num_cols: {self.processor.file_num_cols}")
             return False
         elif len(table_headers) != 0:
             #TODO: I'm sure this could be done neater with an iterator of some sort
