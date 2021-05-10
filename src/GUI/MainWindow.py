@@ -92,6 +92,8 @@ class MainWindow:
                 # print filename in Entry field next to 'Save' button
                 self._entry_box_message(f)
                 self.settings_btn.state(["!disabled"])
+                # get the processor ready to process
+                self.processor.src_path = self.src_path
         except RuntimeError:
             self._entry_box_message("No file selected")
             self.settings_btn.state(["disabled"])
