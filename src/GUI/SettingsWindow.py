@@ -1,9 +1,7 @@
 from tkinter import *
 from tkinter import ttk
-import csv
 import json
 from tkinter import messagebox
-import os.path
 
 from src.csvproc.csvproc import CSVProc
 from src import CONF
@@ -44,14 +42,18 @@ class SettingsWindow:
         self.last_click_x = -1
         self.last_click_y = -1
 
-        width = 900
-        height = 350
+        # (roughly) center settings window
+        # width = 1200
+        # height = 350
+        # TODO: make this *actually* center the window
+        width = self.window.winfo_reqwidth()
+        height = self.window.winfo_reqheight()
         ws = self.window.winfo_screenwidth()
         hs = self.window.winfo_screenheight()
-        x = (ws / 2) - (width / 2)
+        x = (ws / 2) - width - 200
         y = (hs / 2) - (height / 2)
-        # TODO: change x var to 'x' (not 100)
-        self.window.geometry("%dx%d+%d+%d" % (width, height, 100, y))
+        self.window.geometry("+%d+%d" % (x, y))
+        # self.window.geometry("%dx%d+%d+%d" % (width, height, x, y))
 
         self.main_frame = ttk.Frame(self.window, padding="10 5")
         self.main_frame.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -124,8 +126,6 @@ class SettingsWindow:
         self.save_btn = ttk.Button(self.options_frame, text="Save", command=lambda: self._save_settings())
         self.save_btn.grid(row=1, column=0, sticky=(S, E))
 
-        # TODO: might not want default 'close' behavior to be 'save settings'... change this or the saveBtn callback
-        # self.window.protocol("WM_DELETE_WINDOW", lambda: self._save_settings())
         self.window.bind('<Button-1>', self._get_click_xy)
 
         # add some padding around each UI element in mainframe
@@ -245,16 +245,20 @@ class SettingsWindow:
         if len(ht) > 1:
             self.unused_headers.add(ht)
 
-        # header "None" doesn't behave like the other headers in that it shouldn't be removed
+        # headers "Ignore" and "None" don't behave like the other headers in that they shouldn't be removed
         #   when selected (to avoid "gridlock" when all columns have headers assigned)
-        if headerText != "[None]":
-            self.table.heading(column, text=headerText)
-            self.unused_headers.remove(headerText)
-            self.used_headers.add(headerText)
-        else:
+        if headerText == "[None]":
             # when changing a header to "None", it's existing text should be
             # added back into the set of unusedHeaders
             self.table.heading(column, text="")
+        elif headerText == "[Ignore]":
+            # when changing a header to "Ignore", it's existing text should be
+            # added back into the set of unusedHeaders
+            self.table.heading(column, text="[Ignore]")
+        else:
+            self.table.heading(column, text=headerText)
+            self.unused_headers.remove(headerText)
+            self.used_headers.add(headerText)
 
         popup.destroy()
         self.heading_popup_isopen = False   # allow new popups to spawn
@@ -302,8 +306,7 @@ class SettingsWindow:
                 self._boiler_cond_toggled()
         except KeyError:
             # config file not what we expected?
-            # TODO: replace with error message printed to mainwindow or _display_errorbox
-            print("Error loading config file: key not found.")
+            self._display_errorbox("Error loading config file: key not found.")
             return False
 
         # indicate successful settings load to the caller
@@ -380,5 +383,6 @@ class SettingsWindow:
         return column_headers
 
 
-    def _display_errorbox(self, text):
+    @staticmethod
+    def _display_errorbox(text):
         messagebox.showerror(message=text)

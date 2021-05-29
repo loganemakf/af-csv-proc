@@ -17,7 +17,7 @@ class CSVProc:
         # set of all possible supported columns in source catalog .csv file
         self.af_headers = {"LotNum", "Title", "Desc. 1", "Desc. 2", "Desc. 3", "Desc. 4", "Desc. 5", "LoEst",
                               "HiEst", "StartBid", "Condition", "Height", "Width", "Depth", "DimUnit", "Weight",
-                              "WtUnit", "Reserve", "Qty", "[None]"}
+                              "WtUnit", "Reserve", "Qty", "Consign#", "Ref#", "[Ignore]", "[None]"}
 
         # dictionary mapping [af_headers]: [LiveAuctioneers headers]
         self.la_headers = {"LotNum": "LotNum", "Title": "Title", "Desc": "Description", "LoEst": "LowEst", "HiEst": "HiEst",
@@ -26,7 +26,7 @@ class CSVProc:
                   "Weight Unit", "Reserve": "Reserve Price", "Qty": "Quantity"}
 
         # dictionary mapping [af_headers]: [Invaluable headers]
-        self.inv_headers = {"LotNum": "Lot Number", "Title": "Lot Title", "Desc": "Lot Description", "LoEst": "Lo Est",
+        self.inv_headers = {"LotNum": "Lot Number", "LotExt": "Lot Ext", "Title": "Lot Title", "Desc": "Lot Description", "LoEst": "Lo Est",
                            "HiEst": "Hi Est", "StartBid": "Starting Bid", "Condition": "Condition"}
 
         self.data = []  # local copy of catalog file data
@@ -213,7 +213,7 @@ class CSVProc:
 
         for record in data:
             try:
-                int(record["Qty"])
+                float(record["Qty"])
             except ValueError:
                 self._add_lot_warning(record["LotNum"], "Qty. field not parsable as an integer.")
                 all_numeric = False
@@ -243,7 +243,7 @@ class CSVProc:
 
     def _uppercase_lotnums(self, data: list):
         for record in data:
-            record["LotNum"] = record["LotNum"].upper()
+            record["LotNum"] = record["LotNum"].upper().strip()
 
 
     def _process_startbids(self, data: list):
@@ -251,7 +251,7 @@ class CSVProc:
             try:
                 if self.calc_startbid:
                     if self.calc_empty_startbids:   # calculate empty startbid fields only
-                        if not record["StartBid"]:    # if startbid field is empty...
+                        if not record["StartBid"] or float(record["StartBid"]) < 5.00:   # if startbid field is empty...
                             record["StartBid"] = 0.5 * float(record["LoEst"])
                     else:   # calculate all startbids
                         record["StartBid"] = 0.5 * float(record["LoEst"])
@@ -267,8 +267,11 @@ class CSVProc:
         """
         for record in data:
             for field in record:
-                record[field] = re.sub(' {2,}', ' ', record[field])
-                record[field] = record[field].strip()
+                try:
+                    record[field] = re.sub(' {2,}', ' ', record[field])
+                    record[field] = record[field].strip()
+                except TypeError:
+                    pass    # handle (or rather, don't) empty fields
 
 
     def _find_errors(self, data: list):
@@ -286,8 +289,8 @@ class CSVProc:
             ValueError: If float() fails.
         """
         for record in data:
-            #TODO: try replacing find() below with ("  " in record["Desc"])
-            if record["Desc"].find("  ") > -1:
+            # if record["Desc"].find("  ") > -1:
+            if "  " in record["Desc"]:
                 self._add_lot_warning(record["LotNum"], "Double space found.")
             if not record["Desc"].endswith(('.', ')')):
                 self._add_lot_warning(record["LotNum"], "Description ends with a character other than '.' or ')'.")
@@ -299,31 +302,16 @@ class CSVProc:
                 self._add_lot_warning(record["LotNum"], "Title longer than 60 characters.")
             if float(record["LoEst"]) > float(record["HiEst"]):
                 self._add_lot_warning(record["LotNum"], "Low estimate greater than high estimate.")
+            if float(record["LoEst"]) < 5.00 or float(record["HiEst"]) < 5.00 or float(record["StartBid"]) < 5.00:
+                self._add_lot_warning(record["LotNum"], "Lo/HiEst or StartBid is below $5.")
 
             self._log_error_if(not record["Condition"].isprintable(), record, "Condition contains unprintable "
                                                                            "characters).")
-            # if not record["Condition"].isprintable():
-            #     self._add_lot_warning(record["LotNum"], "Condition contains unprintable character(s).")
             self._log_error_if(not record["Condition"].isascii(), record, "Condition contains non-ASCII character(s).")
-            # if not record["Condition"].isascii():
-            #     self._add_lot_warning(record["LotNum"], "Condition contains non-ASCII character(s).")
             self._log_error_if(not record["Condition"].endswith(('.', ')')), record, "Condition ends with a character other than '.' or ')'.")
-            # if not record["Condition"].endswith(('.', ')')):
-            #     self._add_lot_warning(record["LotNum"], "Condition ends with a character other than '.' or ')'.")
             self._log_error_if(float(record["StartBid"]) > float(record["LoEst"]), record, "StartBid greater than low estimate.")
-            # if float(record["StartBid"]) > float(record["LoEst"]):
-            #     self._add_lot_warning(record["LotNum"], "StartBid greater than low estimate.")
             self._log_error_if(float(record["StartBid"]) > float(record["HiEst"]), record, "StartBid greater than "
                                                                                            "high estimate.")
-            # if float(record["StartBid"]) > float(record["HiEst"]):
-            #     self._add_lot_warning(record["LotNum"], "StartBid greater than high estimate.")
-            #TODO: these float checks are probably redundant now (see _check_numeric_fields() )
-            # if not self._is_float_str(record["Height"]):
-            #     self._add_lot_warning(record["LotNum"], "Height contains non-numeric character(s).")
-            # if not self._is_float_str(record["Width"]):
-            #     self._add_lot_warning(record["LotNum"], "Width contains non-numeric character(s).")
-            # if not self._is_float_str(record["Depth"]):
-            #     self._add_lot_warning(record["LotNum"], "Depth contains non-numeric character(s).")
 
 
     @try_pass
@@ -370,13 +358,12 @@ class CSVProc:
                 for q in title_eng_qtys:
                     total_qty += eng_ints[q]
 
-                if total_qty != int(record["Qty"]):
+                if total_qty != float(record["Qty"]):
                     self._add_lot_warning(record["LotNum"], "Possible mismatch between title & quantity.")
             except KeyError:    # in case Qty is not defined
                 pass
 
 
-    # TODO: print warnings in lot-order (not alphabetically or in dict order)
     def _generate_warning_log(self):
         """Generates a logfile of lot warnings at location specified by 'path'.
 
@@ -430,6 +417,8 @@ class CSVProc:
             numeric_part = float(s[0][:-1])
             letter_part = float(ord(s[0][-1].upper())) / 100.0
             return numeric_part + letter_part
+        else:
+            return -1
 
 
     def count_warnings(self) -> int:
@@ -446,87 +435,137 @@ class CSVProc:
         return warning_count
 
 
-    def split_lot_ext(self):
+    def _split_lot_ext(self, data: list):
         """Separates numeric and alpha lot components.
 
-        Adds a new "lot_ext" entry to each dict in csv_data containing
-        the alpha portion of "lot" (eg. lot=205A becomes lot=205 and lot_ext=A).
+        Adds a new "LotExt" entry to each dict in csv_data containing
+        the alpha portion of "lot" (eg. LotNum=205A becomes LotNum=205 and LotExt=A).
 
         Args:
-            csv_data (list[dict]): A list of dicts representing csv file rows.
-
-        Returns:
-            list[dict]: 'csv_data', with the above changes applied.
+            data (list[dict]): A list of dicts representing csv file rows.
 
         Raises:
             ValueError: If a lot contains non-terminating alpha characters.
         """
-        for csv_line in self.data:
-            if csv_line["lot"].isdecimal():
-                csv_line["lot_ext"] = ""
+        for record in data:
+            lot_num = record["LotNum"]
+
+            if lot_num.isdecimal():
+                record["LotExt"] = ""
             else:
-                if csv_line["lot"][:-1].isdecimal() and csv_line["lot"][-1:].isalpha():
-                    csv_line["lot_ext"] = csv_line["lot"][-1:].upper()
-                    csv_line["lot"] = csv_line["lot"][:-1]
+                if lot_num[:-1].isdecimal() and lot_num[-1:].isalpha():
+                    record["LotExt"] = lot_num[-1:]
+                    record["LotNum"] = lot_num[:-1]
                 else:
-                    self._add_lot_warning(csv_line["lot"], "Lot number contains non-terminating A-Z character(s).")
+                    self._add_lot_warning(lot_num, "Lot number contains non-terminating A-Z character(s).")
                     raise ValueError("Unexpected alpha character(s) in lot number.")
 
 
-    def export_invaluable(self, path):
-        self._format_whitespace()
-        self._find_errors()
-        self.split_lot_ext()
+    def _export_invaluable(self, data: list, progress_callback, error_callback):
+        # generate file name
+        fname = "Invalu_Export_" + self._get_timestamp() + ".csv"
+        path = os.path.join(self.dest_path, fname)
 
-        with open(path, "w", newline="") as inv_file:
-            writer = csv.writer(inv_file)
-            writer.writerow(self.inv_headers)
+        # do the processing
+        self._uppercase_lotnums(data)
+        progress_callback(8)
+        if self._check_numeric_fields(data):
+            progress_callback(11)
+            self._process_conditions(data)
+            progress_callback(14)
+            self._process_startbids(data)
+            progress_callback(17)
+            self._format_whitespace(data)
+            progress_callback(20)
+            self._find_errors(data)
+            progress_callback(23)
+            self._split_lot_ext(data)
+            progress_callback(26)
+            # self._check_title_quantities(data)
 
-            for line in self.data:
-                writer.writerow([line["lot"], line["lot_ext"], line["title"], line["desc"], line["loEst"], line["hiEst"],
-                                 line["startBid"], line["condition"]])
+            # create header row (for ordering purposes)
+            inv_headers = []
+            for h in self.export_file_headers:
+                try:
+                    inv_headers.append(self.inv_headers[h])
+                except KeyError:
+                    pass
 
-        if self.count_warnings() > 0:
-            # TODO: indicate to user that issues were identified & logfile created
-            self._generate_warning_log()
+            progress_callback(29)
+            # insert column for lot alpha-extensions
+            lot_num_index = inv_headers.index("Lot Number")
+            inv_headers.insert(lot_num_index + 1, "Lot Ext")
+
+            with open(path, "w", newline="") as inv_file:
+                writer = csv.DictWriter(inv_file, inv_headers)
+                writer.writeheader()
+                for line in data:
+                    # map AFlex header keys to Invaluable header keys
+                    new_line = {}
+                    for key, val in line.items():
+                        try:
+                            new_line[self.inv_headers[key]] = val
+                        except KeyError:
+                            pass
+
+                    writer.writerow(new_line)
+
+            print("Invaluable export complete")
+        else:
+            error_callback("Non-numeric value encountered in a numeric field; export aborted.")
 
 
-    def _export_liveauctioneers(self, data: list, progress_callback):
+    def _export_liveauctioneers(self, data: list, progress_callback, error_callback):
         # generate file name
         fname = "LiveAuc_Export_" + self._get_timestamp() + ".csv"
         path = os.path.join(self.dest_path, fname)
 
         # do the processing
         self._uppercase_lotnums(data)
+        progress_callback(48)
         if self._check_numeric_fields(data):
+            progress_callback(51)
             self._process_conditions(data)
+            progress_callback(54)
             self._process_startbids(data)
+            progress_callback(57)
             self._format_whitespace(data)
+            progress_callback(60)
             self._find_errors(data)
-            self._check_title_quantities(data)
+            progress_callback(63)
+            # self._check_title_quantities(data)
 
             # create header row (for ordering purposes)
             la_headers = []
             for h in self.export_file_headers:
-                la_headers.append(self.la_headers[h])
+                try:
+                    la_headers.append(self.la_headers[h])
+                except KeyError:
+                    pass
+
+            progress_callback(66)
 
             with open(path, "w", newline="") as la_file:
                 writer = csv.DictWriter(la_file, la_headers)
                 writer.writeheader()
                 for line in data:
                     # map AFlex header keys to LA header keys
-                    line = {self.la_headers[key]: val for key, val in line.items()}
-                    # print(line)
-                    writer.writerow(line)
+                    new_line = {}
+                    for key, val in line.items():
+                        try:
+                            new_line[self.la_headers[key]] = val
+                        except KeyError:
+                            pass
+
+                    writer.writerow(new_line)
+
+                    # line = {self.la_headers[key]: val for key, val in line.items()}
+                    # # print(line)
+                    # writer.writerow(line)
 
             print("Live auctioneers export complete")
         else:
-            pass    # TODO: display "unparsable number" error dialog
-
-        if self.count_warnings() > 0:
-            # TODO: indicate to user that issues were identified & logfile created
-            self._generate_warning_log()
-
+            error_callback("Non-numeric value encountered in a numeric field; export aborted.")
 
 
     @staticmethod
@@ -534,28 +573,25 @@ class CSVProc:
         return datetime.datetime.now().strftime("%m_%d_%Y")
 
 
-    def process(self, *, progress_callback):
+    def process(self, *, progress_callback, result_callback):
         self._load_af_csv()
-
-        progress = 0
-        progress_callback(progress)
+        progress_callback(0.0)
 
         self._fix_descriptions()
+        progress_callback(2.5)    # set progress bar to 5%
 
         inv_data = copy.deepcopy(self.data)
         la_data = copy.deepcopy(self.data)
+        progress_callback(5)
 
-        self._export_liveauctioneers(la_data, progress_callback)
+        self._export_invaluable(inv_data, progress_callback, result_callback)
+        progress_callback(45)
+        self._export_liveauctioneers(la_data, progress_callback, result_callback)
+        progress_callback(90)
 
+        if self.count_warnings() > 0:
+            self._generate_warning_log()
+            num_warnings = self.count_warnings()
+            result_callback(f"{num_warnings} warnings generated; check log file")
 
-
-################################################################################################################
-#### Playground code
-
-# inv_data = load_af_csv("afexp1.csv", af_headers)
-# la_data = copy.deepcopy(inv_data)
-
-# export_invaluable("inval_export.csv", inv_data)
-# export_liveauctioneers("la_export.csv", la_data)
-
-###################################################################################################################
+        progress_callback(99.99)

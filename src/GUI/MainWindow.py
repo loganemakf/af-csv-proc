@@ -1,5 +1,5 @@
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from tkinter import filedialog as fd
 import os.path
 
@@ -25,6 +25,16 @@ class MainWindow:
 
 
     def _setup_GUI(self):
+        # (roughly) center main window
+        # TODO: make this *actually* center the window
+        width = self.window.winfo_reqwidth()
+        height = self.window.winfo_reqheight()
+        ws = self.window.winfo_screenwidth()
+        hs = self.window.winfo_screenheight()
+        x = (ws / 2) - width
+        y = (hs / 2) - (height / 2)
+        self.window.geometry("+%d+%d" % (x, y))
+
         self.main_frame = ttk.Frame(self.window, padding="30 15")
         self.main_frame.grid(column=0, row=0, sticky=(N, W, E, S))
 
@@ -98,14 +108,17 @@ class MainWindow:
             self._entry_box_message("No file selected")
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
+            self.set_progress(0)
         except TypeError:
             self._entry_box_message(f"Invalid filetype: {ext}", is_error_msg=True)
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
+            self.set_progress(0)
         except:
             self._entry_box_message("Unknown error =/")
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
+            self.set_progress(0)
 
 
     def _entry_box_message(self, message: str, is_error_msg: bool = False):
@@ -120,7 +133,7 @@ class MainWindow:
     def get_dest_file(self) -> None:
         dest_path = fd.askdirectory(title="Select save location")
         self.processor.dest_path = dest_path
-        self.processor.process(progress_callback=self.set_progress)
+        self.processor.process(progress_callback=self.set_progress, result_callback=self._display_info_message)
 
 
     def open_settings(self):
@@ -153,3 +166,8 @@ class MainWindow:
         # this function fixes an error on window close
         self.window.eval('::ttk::CancelRepeat')
         self.window.destroy()
+
+
+    @staticmethod
+    def _display_info_message(msg):
+        messagebox.showinfo(message=msg)
