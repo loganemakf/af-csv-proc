@@ -1,10 +1,13 @@
+# MainWindow.py
+# af-csv-proc - Post-processor for exported auction catalogs
+# Copyright (C) 2021  Logan Foster
+
 from tkinter import *
 from tkinter import ttk, messagebox
 from tkinter import filedialog as fd
 import os.path
-
 from src.GUI.SettingsWindow import SettingsWindow
-from src.csvproc.csvproc import CSVProc
+from src.CSVProc.CSVProc import CSVProc
 from src import C
 
 
@@ -80,7 +83,8 @@ class MainWindow:
         """Prompts user to select a .csv file for processing.
 
         Opens a tk filedialog to enable file selection, makes sure the file is readable,
-        controls enabling/disabling of 'Settings' & 'Process' buttons.
+        controls enabling/disabling of 'Settings' & 'Process' buttons. Called when user
+        clicks 'Browse' button.
         """
         try:
             self.src_path = fd.askopenfilename(title="Select .csv file", filetypes=[("csv", ".csv")])
@@ -95,33 +99,33 @@ class MainWindow:
 
             # make sure we can open the selected file
             if not CSVProc.test_open(self.src_path):
-                self._entry_box_message("Unable to open selected file :(")
+                self._set_entry_box_message("Unable to open selected file :(", is_error_msg=True)
                 self.process_btn.state(["disabled"])
                 self.settings_btn.state(["disabled"])
             else:
                 # print filename in Entry field next to 'Save' button
-                self._entry_box_message(f)
+                self._set_entry_box_message(f)
                 self.settings_btn.state(["!disabled"])
                 # get the processor ready to process
                 self.processor.src_path = self.src_path
         except RuntimeError:
-            self._entry_box_message("No file selected")
+            self._set_entry_box_message("No file selected")
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
             self.set_progress(0)
         except TypeError:
-            self._entry_box_message(f"Invalid filetype: {ext}", is_error_msg=True)
+            self._set_entry_box_message(f"Invalid filetype: {ext}", is_error_msg=True)
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
             self.set_progress(0)
         except:
-            self._entry_box_message("Unknown error =/")
+            self._set_entry_box_message("Unknown error =/", is_error_msg=True)
             self.settings_btn.state(["disabled"])
             self.process_btn.state(["disabled"])
             self.set_progress(0)
 
 
-    def _entry_box_message(self, message: str, is_error_msg: bool = False):
+    def _set_entry_box_message(self, message: str, is_error_msg: bool = False):
         if is_error_msg:
             self.source_entry['foreground'] = "red"
         else:
@@ -131,6 +135,10 @@ class MainWindow:
 
 
     def get_dest_file(self) -> None:
+        """'Process' button click handler.
+
+        Prompts user for a directory for output files & calls CSVProc process() function.
+        """
         dest_path = fd.askdirectory(title="Select save location")
         self.processor.dest_path = dest_path
         self.processor.process(progress_callback=self.set_progress, result_callback=self._display_info_message)
@@ -146,6 +154,8 @@ class MainWindow:
 
     def set_progress(self, value, *, increment=False):
         """Sets (or increments) the underlying value of the progressbar (0-100).
+
+        Note, setting progressbar to 100 is visually identical to 0... 99.9 is used here to represent "full".
 
         Args:
             value: the value to set(/increment) the progressbar to(/by)

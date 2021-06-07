@@ -1,7 +1,11 @@
+# __init__.py (package)
+# af-csv-proc - Post-processor for exported auction catalogs
+# Copyright (C) 2021  Logan Foster
+#
+
 # PROGRAM CONSTANTS
-# -----------------
 class C:
-    PROGRAM_NAME = "AF .csv Processor v1.0 beta"
+    PROGRAM_NAME = "AF .csv Processor v1.0"
 
 
 # Config file dictionary keys

@@ -1,22 +1,25 @@
+# SettingsWindow.py
+# af-csv-proc - Post-processor for exported auction catalogs
+# Copyright (C) 2021  Logan Foster
+
 from tkinter import *
 from tkinter import ttk
 import json
 from tkinter import messagebox
-
-from src.csvproc.csvproc import CSVProc
+from src.CSVProc.CSVProc import CSVProc
 from src import CONF
 
 
 class SettingsWindow:
 
-    def __init__(self, main_window, processor: CSVProc, source_path: str, *, save_success_callback):
+    def __init__(self, main_window: Tk, processor: CSVProc, source_path: str, *, save_success_callback):
         self.window = Toplevel(main_window)
         self.processor = processor
         self._save_success_callback = save_success_callback
         self.window.title("CSV Display GUI, beta 1")
         self.settings_filename = "config.json"
         self.source_path = source_path
-        self.heading_popup_isopen = False
+        self.heading_popup_is_open = False
 
         self._setup_GUI()
 
@@ -123,6 +126,7 @@ class SettingsWindow:
                                                           onvalue="yes", offvalue="no", state="disabled")
         self.calc_empty_startbids_chkbx.grid(row=1, column=0, sticky=W, padx=(20, 0))
 
+        # TODO: does this really need to be a lambda?
         self.save_btn = ttk.Button(self.options_frame, text="Save", command=lambda: self._save_settings())
         self.save_btn.grid(row=1, column=0, sticky=(S, E))
 
@@ -157,7 +161,7 @@ class SettingsWindow:
 
 
     def _populate_table(self):
-        """Fills the treeview (table) with data from first 4 lines of processor's file.
+        """Fills the treeview (table) with data from the first 4 lines of processor's file.
         """
         data = self.processor.get_n_rows(4)
 
@@ -196,11 +200,11 @@ class SettingsWindow:
         Args:
             colNum: the index of the treeview (table) column to set the header for.
         """
-        if self.heading_popup_isopen:
+        if self.heading_popup_is_open:
             return
 
-        # prevent multiple heading-set popups from being open at once
-        self.heading_popup_isopen = True
+        # prevent multiple header-set popups from being open at once
+        self.heading_popup_is_open = True
         popup = Toplevel(self.window)
         popup.title("Set col. header:")
         popup.attributes("-topmost", TRUE)  # keep popup on top of settings window
@@ -228,6 +232,7 @@ class SettingsWindow:
 
     def _set_col_header_helper(self, *, column: int, header: StringVar, popup: Toplevel):
         """Sets treeview column header text based on parameters.
+
         Function is called when a header is selected from the popup's dropdown.
         Sets of used/unused headers are also maintained here.
 
@@ -241,19 +246,15 @@ class SettingsWindow:
         ht = self.table.heading(column, option="text")
 
         # if there is a header already assigned to the specified column,
-        #   add it back to the unused_headers set.
+        #   add it back to the set of unused_headers.
         if len(ht) > 1:
             self.unused_headers.add(ht)
 
         # headers "Ignore" and "None" don't behave like the other headers in that they shouldn't be removed
         #   when selected (to avoid "gridlock" when all columns have headers assigned)
         if headerText == "[None]":
-            # when changing a header to "None", it's existing text should be
-            # added back into the set of unusedHeaders
             self.table.heading(column, text="")
         elif headerText == "[Ignore]":
-            # when changing a header to "Ignore", it's existing text should be
-            # added back into the set of unusedHeaders
             self.table.heading(column, text="[Ignore]")
         else:
             self.table.heading(column, text=headerText)
@@ -261,12 +262,12 @@ class SettingsWindow:
             self.used_headers.add(headerText)
 
         popup.destroy()
-        self.heading_popup_isopen = False   # allow new popups to spawn
+        self.heading_popup_is_open = False   # allow new popups to spawn
 
 
     def _release_popup_lock(self, popup):
         popup.destroy()
-        self.heading_popup_isopen = False
+        self.heading_popup_is_open = False
 
 
     def _load_settings(self):
@@ -274,12 +275,13 @@ class SettingsWindow:
 
         Returns: True if load was successful, False if not.
         """
-        # load table headers from processor
         table_headers = self.processor.file_headers
 
         if len(table_headers) != self.processor.file_num_cols and len(table_headers) != 0:
-            # mismatch between number of headers in processor and num columns in table
-            print(f"Len table headers {len(table_headers)}; file_num_cols: {self.processor.file_num_cols}")
+            # mismatch between number of headers in processor and number of columns in table
+            self._display_errorbox("Error: mismatch between table and processor column counts.")
+            # TODO: remove following line (debugging use)
+            # print(f"Len table headers {len(table_headers)}; file_num_cols: {self.processor.file_num_cols}")
             return False
         elif len(table_headers) != 0:
             #TODO: I'm sure this could be done neater with an iterator of some sort
@@ -293,7 +295,7 @@ class SettingsWindow:
             config_data = json.load(sf)
 
         try:
-            # enable text box for a moment in order to insert loaded boilerplate condition text
+            # enable condition text box for a moment in order to insert loaded boilerplate condition text
             self.condition_report_txt['state'] = 'normal'
             self.condition_report_txt.insert(1.0, config_data["bp_condition"])
 
@@ -343,7 +345,7 @@ class SettingsWindow:
         with open(self.settings_filename, "w") as config_file:
             json.dump(config_data, config_file, indent=4)
 
-        # enable "process" button in main window
+        # enable 'process' button in main window
         self._save_success_callback()
 
         self.window.destroy()
