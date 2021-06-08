@@ -3,8 +3,8 @@
 ## A post-processor for AuctionFlex-exported catalog files.
 ***
 
-![af csv proc main window](/screenshots/img/mainwindow_1.0.png?raw=true)
-![af csv proc settings window](/screenshots/img/settingswindow_1.0.png?raw=true)
+![af csv proc main window](/../screenshots/img/mainwindow_1.0_half.png?raw=true)
+![af csv proc settings window](/../screenshots/img/settingswindow_1.0_half.png?raw=true)
 
 af-csv-proc is a Python program that processes an auction catalog .csv file for upload to third-party bidding 
 platforms such as LiveAuctioneers and Invaluable. It attempts to correct a number of issues present in catalog files 
