@@ -1,13 +1,25 @@
 # SettingsWindow.py
 # af-csv-proc - Post-processor for exported auction catalogs
 # Copyright (C) 2021  Logan Foster
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import json
-from tkinter import messagebox
 from src.CSVProc.CSVProc import CSVProc
-from src import CONF
+from src import CONF, C
 
 
 class SettingsWindow:
@@ -16,7 +28,7 @@ class SettingsWindow:
         self.window = Toplevel(main_window)
         self.processor = processor
         self._save_success_callback = save_success_callback
-        self.window.title("CSV Display GUI, beta 1")
+        self.window.title(f"{C.PROGRAM_NAME} - Settings")
         self.settings_filename = "config.json"
         self.source_path = source_path
         self.heading_popup_is_open = False
@@ -30,13 +42,9 @@ class SettingsWindow:
 
         self._populate_table()
 
-        # TODO: print to somewhere else
         # load settings from previously opened settings window and/or "sticky"
         # configuration settings from config.json file.
-        if self._load_settings():
-            print("Settings load successful")
-        else:
-            print("Settings load failed :(")
+        self._load_settings()
 
         self.window.mainloop()
 
@@ -46,9 +54,6 @@ class SettingsWindow:
         self.last_click_y = -1
 
         # (roughly) center settings window
-        # width = 1200
-        # height = 350
-        # TODO: make this *actually* center the window
         width = self.window.winfo_reqwidth()
         height = self.window.winfo_reqheight()
         ws = self.window.winfo_screenwidth()
@@ -56,7 +61,6 @@ class SettingsWindow:
         x = (ws / 2) - width - 200
         y = (hs / 2) - (height / 2)
         self.window.geometry("+%d+%d" % (x, y))
-        # self.window.geometry("%dx%d+%d+%d" % (width, height, x, y))
 
         self.main_frame = ttk.Frame(self.window, padding="10 5")
         self.main_frame.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -126,8 +130,7 @@ class SettingsWindow:
                                                           onvalue="yes", offvalue="no", state="disabled")
         self.calc_empty_startbids_chkbx.grid(row=1, column=0, sticky=W, padx=(20, 0))
 
-        # TODO: does this really need to be a lambda?
-        self.save_btn = ttk.Button(self.options_frame, text="Save", command=lambda: self._save_settings())
+        self.save_btn = ttk.Button(self.options_frame, text="Save", command=self._save_settings)
         self.save_btn.grid(row=1, column=0, sticky=(S, E))
 
         self.window.bind('<Button-1>', self._get_click_xy)
@@ -194,11 +197,11 @@ class SettingsWindow:
                 self.table.column(col, minwidth=100, width=100)
 
 
-    def set_col_header(self, colNum):
+    def set_col_header(self, col_num):
         """Creates a popup prompt for user to select a column header from the list.
 
         Args:
-            colNum: the index of the treeview (table) column to set the header for.
+            col_num: the index of the treeview (table) column to set the header for.
         """
         if self.heading_popup_is_open:
             return
@@ -214,7 +217,6 @@ class SettingsWindow:
         #   to enable "double click to set"-like behavior
         root_geom = self.window.geometry()
         popup_geom = root_geom[root_geom.find('+'):].split('+')[1:]
-        #TODO: maybe make this a little less magic-numbery?
         popup.geometry(f"+{int(popup_geom[0]) + self.last_click_x - 75}+{int(popup_geom[1]) + self.last_click_y + 15}")
         popup.resizable(FALSE, FALSE)
         popup.lift(self.window)
@@ -225,8 +227,8 @@ class SettingsWindow:
         header["values"] = sorted(list(self.unused_headers), key=str.lower)
         header.state(["readonly"])
         header.bind("<<ComboboxSelected>>",
-                    lambda _, c=colNum, h=header_var, p=popup: self._set_col_header_helper(column=c, header=h,
-                                                                                          popup=p))
+                    lambda _, c=col_num, h=header_var, p=popup: self._set_col_header_helper(column=c, header=h,
+                                                                                            popup=p))
         header.grid()
 
 
@@ -242,7 +244,7 @@ class SettingsWindow:
             popup: handle to the popup window object itself.
         """
         #
-        headerText = header.get()
+        header_text = header.get()
         ht = self.table.heading(column, option="text")
 
         # if there is a header already assigned to the specified column,
@@ -252,14 +254,14 @@ class SettingsWindow:
 
         # headers "Ignore" and "None" don't behave like the other headers in that they shouldn't be removed
         #   when selected (to avoid "gridlock" when all columns have headers assigned)
-        if headerText == "[None]":
+        if header_text == "[None]":
             self.table.heading(column, text="")
-        elif headerText == "[Ignore]":
+        elif header_text == "[Ignore]":
             self.table.heading(column, text="[Ignore]")
         else:
-            self.table.heading(column, text=headerText)
-            self.unused_headers.remove(headerText)
-            self.used_headers.add(headerText)
+            self.table.heading(column, text=header_text)
+            self.unused_headers.remove(header_text)
+            self.used_headers.add(header_text)
 
         popup.destroy()
         self.heading_popup_is_open = False   # allow new popups to spawn
@@ -280,11 +282,8 @@ class SettingsWindow:
         if len(table_headers) != self.processor.file_num_cols and len(table_headers) != 0:
             # mismatch between number of headers in processor and number of columns in table
             self._display_errorbox("Error: mismatch between table and processor column counts.")
-            # TODO: remove following line (debugging use)
-            # print(f"Len table headers {len(table_headers)}; file_num_cols: {self.processor.file_num_cols}")
             return False
         elif len(table_headers) != 0:
-            #TODO: I'm sure this could be done neater with an iterator of some sort
             h = 0
             for c in range(self.processor.file_num_cols):
                 self.table.heading(c, text=table_headers[h])
