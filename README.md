@@ -4,6 +4,7 @@
 ***
 
 ![af csv proc main window](/screenshots/img/mainwindow_1.0.png?raw=true)
+![af csv proc settings window](/screenshots/img/settingswindow_1.0.png?raw=true)
 
 af-csv-proc is a Python program that processes an auction catalog .csv file for upload to third-party bidding 
 platforms such as LiveAuctioneers and Invaluable. It attempts to correct a number of issues present in catalog files 
@@ -41,6 +42,8 @@ A sample workflow might look something like the following:
     As an example, af-csv-proc checks whether a lot's description ends with either a '.' or ')' character. While the 
     absence of one of these characters is a minor punctuation issue on its own, it can also indicate that a 
     description has been truncated mid-sentence during export from AuctionFlex (which is far more serious).
+    
+A short sample AuctionFlex catalog file, `catalog_sample.csv`, is provided in the root of this repository.
 ***
 ### Background
 The process of uploading an auction catalog created in AuctionFlex to a third-party internet bidding platform 
