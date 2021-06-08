@@ -1,6 +1,19 @@
 # CSVProc.py
 # af-csv-proc - Post-processor for exported auction catalogs
 # Copyright (C) 2021  Logan Foster
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import csv
 import re
@@ -24,10 +37,11 @@ class CSVProc:
                               "WtUnit", "Reserve", "Qty", "Consign#", "Ref#", "[Ignore]", "[None]"}
 
         # dictionary mapping [af_headers]: [LiveAuctioneers headers]
-        self.la_headers = {"LotNum": "LotNum", "Title": "Title", "Desc": "Description", "LoEst": "LowEst", "HiEst": "HiEst",
-              "StartBid": "StartPrice", "Condition": "Condition", "BPCondition": "Condition", "Height": "Height",
-              "Width": "Width", "Depth": "Depth", "DimUnit": "Dimension Unit", "Weight": "Weight", "WtUnit":
-                  "Weight Unit", "Reserve": "Reserve Price", "Qty": "Quantity"}
+        self.la_headers = {"LotNum": "LotNum", "Title": "Title", "Desc": "Description", "LoEst": "LowEst",
+                           "HiEst": "HighEst", "StartBid": "StartPrice", "Condition": "Condition", "BPCondition":
+                           "Condition", "Height": "Height", "Width": "Width", "Depth": "Depth",
+                           "DimUnit": "Dimension Unit", "Weight": "Weight", "WtUnit": "Weight Unit",
+                           "Reserve": "Reserve Price", "Qty": "Quantity"}
 
         # dictionary mapping [af_headers]: [Invaluable headers]
         self.inv_headers = {"LotNum": "Lot Number", "LotExt": "Lot Ext", "Title": "Lot Title", "Desc": "Lot Description", "LoEst": "Lo Est",
@@ -149,22 +163,15 @@ class CSVProc:
             self.data = []
             reader = csv.DictReader(af_file, fieldnames=self.file_headers)
 
-            # TODO: make sure this works
             self.data = [line for line in reader]
-            # for line in reader:
-            #     self.data.append(line)
 
 
     def _fix_descriptions(self):
         """Concatenates 'Desc. [1-5]' entries into a single dict entry, "Desc".
         """
         for record in self.data:
-            # TODO: clean up
-            # try:
             record["Desc"] = record.pop("Desc. 1") + " " + record.pop("Desc. 2") + " " + record.pop("Desc. 3") \
                              + " " + record.pop("Desc. 4") + " " + record.pop("Desc. 5")
-            # except KeyError:    # in case Condition is not defined
-            #     pass
 
         # insert new "Desc" header just before soon-to-be-removed "Desc. 1" header
         self.export_file_headers = self.file_headers.copy()
@@ -313,6 +320,7 @@ class CSVProc:
             self._add_lot_warning(curr_record["LotNum"], error_str)
 
 
+    # this one is in-progress... might finish it later
     def _check_title_quantities(self, data: list):
         """Attempts to check whether quantity in lot title matches value in the "Qty" field.
 
@@ -328,7 +336,8 @@ class CSVProc:
                 # look for spelled-out quantities
                 if re.search("^pair", record["Title"], re.IGNORECASE) and record["Qty"] != "2":
                     self._add_lot_warning(record["LotNum"], "Title contains 'pair' but qty. is not 2.")
-                #TODO: add support for "lot of #" and "# pieces"
+
+                # TODO: add support for "lot of #" and "# pieces"
 
                 # sum numeric quantities in title
                 title_qtys = re.findall(r"\(\d+\)", record["Title"])
@@ -405,10 +414,8 @@ class CSVProc:
         """
         warning_count = 0
         for lot in self.lot_warnings:
-            # TODO: verify this works
-            warning_count += len(lot)
-            # for _ in self.lot_warnings[lot]:
-            #     warning_count += 1
+            for _ in self.lot_warnings[lot]:
+                warning_count += 1
 
         return warning_count
 
