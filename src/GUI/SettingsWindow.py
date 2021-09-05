@@ -4,10 +4,10 @@
 
 from tkinter import *
 from tkinter import ttk
-import json
 from tkinter import messagebox
+import json
 from src.CSVProc.CSVProc import CSVProc
-from src import CONF
+from src import CONF, C
 
 
 class SettingsWindow:
@@ -16,7 +16,7 @@ class SettingsWindow:
         self.window = Toplevel(main_window)
         self.processor = processor
         self._save_success_callback = save_success_callback
-        self.window.title("CSV Display GUI, beta 1")
+        self.window.title(f"{C.PROGRAM_NAME} - File Settings")
         self.settings_filename = "config.json"
         self.source_path = source_path
         self.heading_popup_is_open = False
@@ -53,8 +53,10 @@ class SettingsWindow:
         height = self.window.winfo_reqheight()
         ws = self.window.winfo_screenwidth()
         hs = self.window.winfo_screenheight()
-        x = (ws / 2) - width - 200
-        y = (hs / 2) - (height / 2)
+        # x = (ws / 2) - width - 200
+        x = 300
+        # y = (hs / 2) - (height / 2)
+        y = (hs / 2) - 200
         self.window.geometry("+%d+%d" % (x, y))
         # self.window.geometry("%dx%d+%d+%d" % (width, height, x, y))
 
@@ -126,8 +128,7 @@ class SettingsWindow:
                                                           onvalue="yes", offvalue="no", state="disabled")
         self.calc_empty_startbids_chkbx.grid(row=1, column=0, sticky=W, padx=(20, 0))
 
-        # TODO: does this really need to be a lambda?
-        self.save_btn = ttk.Button(self.options_frame, text="Save", command=lambda: self._save_settings())
+        self.save_btn = ttk.Button(self.options_frame, text="Save", command=self._save_settings)
         self.save_btn.grid(row=1, column=0, sticky=(S, E))
 
         self.window.bind('<Button-1>', self._get_click_xy)
@@ -280,8 +281,6 @@ class SettingsWindow:
         if len(table_headers) != self.processor.file_num_cols and len(table_headers) != 0:
             # mismatch between number of headers in processor and number of columns in table
             self._display_errorbox("Error: mismatch between table and processor column counts.")
-            # TODO: remove following line (debugging use)
-            # print(f"Len table headers {len(table_headers)}; file_num_cols: {self.processor.file_num_cols}")
             return False
         elif len(table_headers) != 0:
             #TODO: I'm sure this could be done neater with an iterator of some sort
@@ -291,16 +290,20 @@ class SettingsWindow:
                 h += 1
 
         # load up a local copy of stored config data
-        with open(self.settings_filename, 'r') as sf:
-            config_data = json.load(sf)
+        try:
+            with open(self.settings_filename, 'r') as sf:
+                config_data = json.load(sf)
+        except OSError:
+            # config file likely doesn't exist
+            return False
 
         try:
             # enable condition text box for a moment in order to insert loaded boilerplate condition text
             self.condition_report_txt['state'] = 'normal'
-            self.condition_report_txt.insert(1.0, config_data["bp_condition"])
+            self.condition_report_txt.insert(1.0, config_data[CONF.BP_COND])
 
             # convert boolean from config file to "yes"/"no" for checkbox variable
-            if config_data["using_bp_condition"]:
+            if config_data[CONF.USING_BP_COND]:
                 self.using_bp_cond_str.set("yes")
                 self._boiler_cond_toggled()
             else:
