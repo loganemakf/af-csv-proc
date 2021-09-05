@@ -24,10 +24,11 @@ class CSVProc:
                               "WtUnit", "Reserve", "Qty", "Consign#", "Ref#", "[Ignore]", "[None]"}
 
         # dictionary mapping [af_headers]: [LiveAuctioneers headers]
-        self.la_headers = {"LotNum": "LotNum", "Title": "Title", "Desc": "Description", "LoEst": "LowEst", "HiEst": "HiEst",
-              "StartBid": "StartPrice", "Condition": "Condition", "BPCondition": "Condition", "Height": "Height",
-              "Width": "Width", "Depth": "Depth", "DimUnit": "Dimension Unit", "Weight": "Weight", "WtUnit":
-                  "Weight Unit", "Reserve": "Reserve Price", "Qty": "Quantity"}
+        self.la_headers = {"LotNum": "LotNum", "Title": "Title", "Desc": "Description", "LoEst": "LowEst",
+                           "HiEst": "HighEst", "StartBid": "StartPrice", "Condition": "Condition", "BPCondition":
+                               "Condition", "Height": "Height", "Width": "Width", "Depth": "Depth", "DimUnit":
+                               "Dimension Unit", "Weight": "Weight", "WtUnit": "Weight Unit",
+                           "Reserve": "Reserve Price", "Qty": "Quantity"}
 
         # dictionary mapping [af_headers]: [Invaluable headers]
         self.inv_headers = {"LotNum": "Lot Number", "LotExt": "Lot Ext", "Title": "Lot Title", "Desc": "Lot Description", "LoEst": "Lo Est",
