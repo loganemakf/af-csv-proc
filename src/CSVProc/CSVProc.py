@@ -9,7 +9,6 @@ import datetime
 import copy
 import os.path
 from src import C
-from src import try_pass
 
 
 class CSVProc:
@@ -18,7 +17,7 @@ class CSVProc:
         # keep track of issues with csv fields by lot number
         self.lot_warnings = {}
 
-        # set of all possible supported columns in source catalog .csv file
+        # set of all possible (supported) columns in source catalog .csv file
         self.af_headers = {"LotNum", "Title", "Desc. 1", "Desc. 2", "Desc. 3", "Desc. 4", "Desc. 5", "LoEst",
                               "HiEst", "StartBid", "Condition", "Height", "Width", "Depth", "DimUnit", "Weight",
                               "WtUnit", "Reserve", "Qty", "Consign#", "Ref#", "[Ignore]", "[None]"}
@@ -29,22 +28,25 @@ class CSVProc:
                                "Condition", "Height": "Height", "Width": "Width", "Depth": "Depth", "DimUnit":
                                "Dimension Unit", "Weight": "Weight", "WtUnit": "Weight Unit",
                            "Reserve": "Reserve Price", "Qty": "Quantity"}
+        self.required_headers_la = ["LotNum", "Title", "Desc", "LoEst", "HiEst", "StartBid"]
 
         # dictionary mapping [af_headers]: [Invaluable headers]
-        self.inv_headers = {"LotNum": "Lot Number", "LotExt": "Lot Ext", "Title": "Lot Title", "Desc": "Lot Description", "LoEst": "Lo Est",
-                           "HiEst": "Hi Est", "StartBid": "Starting Bid", "Condition": "Condition"}
+        self.inv_headers = {"LotNum": "Lot Number", "LotExt": "Lot Ext", "Title": "Lot Title",
+                            "Desc": "Lot Description", "LoEst": "Lo Est", "HiEst": "Hi Est",
+                            "StartBid": "Starting Bid", "Condition": "Condition"}
+        self.required_headers_inv = ["LotNum", "Title", "Desc"]
 
         self.data = []  # local copy of catalog data
 
         self.file_headers = []  # subset of af_headers corresponding to columns in catalog .csv file
-        self.export_file_headers = []
+        self.export_file_headers = []   # defines export column order
         self.src_path = ""      # the catalog .csv file
         self.dest_path = ""     # a folder to save exported LiveAuctioneers/Invaluable .csv (and log) files in
         self.file_num_cols = 0
 
         # configuration options (user-configured in SettingsWindow)
         self.using_bp_condition = False
-        self.bp_condition = ""  # text to substitute for every lot's "condition" field if using_bp_condition == True
+        self.bp_condition = ""  # text to substitute for every lot's "Condition" field if using_bp_condition == True
         self.calc_startbid = False
         self.calc_empty_startbids = False
 
@@ -131,11 +133,11 @@ class CSVProc:
         try:
             self.lot_warnings[lot].index(warning)
         except ValueError:
-            return True     # "warning" not found in list for "lot"
+            return True     # "warning" not found in list for key "lot"
         except KeyError:
-            return True     # no dictionary entry for "lot"
+            return True     # no dictionary entry for key "lot"
 
-        return False    # "warning" already exists for "lot"
+        return False    # "warning" already exists for key "lot"
 
 
     def _load_af_csv(self):
@@ -150,22 +152,15 @@ class CSVProc:
             self.data = []
             reader = csv.DictReader(af_file, fieldnames=self.file_headers)
 
-            # TODO: make sure this works
             self.data = [line for line in reader]
-            # for line in reader:
-            #     self.data.append(line)
 
 
     def _fix_descriptions(self):
         """Concatenates 'Desc. [1-5]' entries into a single dict entry, "Desc".
         """
         for record in self.data:
-            # TODO: clean up
-            # try:
             record["Desc"] = record.pop("Desc. 1") + " " + record.pop("Desc. 2") + " " + record.pop("Desc. 3") \
                              + " " + record.pop("Desc. 4") + " " + record.pop("Desc. 5")
-            # except KeyError:    # in case Condition is not defined
-            #     pass
 
         # insert new "Desc" header just before soon-to-be-removed "Desc. 1" header
         self.export_file_headers = self.file_headers.copy()
@@ -181,14 +176,17 @@ class CSVProc:
         """
         if self.using_bp_condition:
             for record in data:
-                try:
-                    record["Condition"] = self.bp_condition
-                except KeyError:  # in case Condition is not defined
-                    pass
-        else:
+                record["Condition"] = self.bp_condition
+        elif "Condition" in data[0].keys():
             for record in data:
                 self._log_error_if(len(record["Condition"]) == 221, record, "Condition has likely been cut off by "
                                                                             "AuctionFlex during export.")
+
+
+    @staticmethod
+    def _uppercase_lotnums(data: list):
+        for record in data:
+            record["LotNum"] = record["LotNum"].upper().strip()
 
 
     def _check_numeric_fields(self, data: list):
@@ -205,13 +203,12 @@ class CSVProc:
         all_numeric = True
 
         for record in data:
-            try:
-                float(record["Qty"])
-            except ValueError:
-                self._add_lot_warning(record["LotNum"], "Qty. field not parsable as an integer.")
-                all_numeric = False
-            except KeyError:    # in case Qty is not defined
-                pass
+            if "Qty" in record.keys():
+                try:
+                    float(record["Qty"])
+                except ValueError:
+                    self._add_lot_warning(record["LotNum"], "Qty. field not parsable as a number.")
+                    all_numeric = False
 
             try:
                 float(record["LoEst"])
@@ -223,38 +220,45 @@ class CSVProc:
             except KeyError:    # in case StartBid is not defined
                 pass
 
-            try:
-                float(record["Reserve"])
-            except ValueError:
-                self._add_lot_warning(record["LotNum"], "Reserve field not parsable as a number.")
-                all_numeric = False
-            except KeyError:    # in case Reserve is not defined
-                pass
+            if "Reserve" in record.keys():
+                try:
+                    float(record["Reserve"])
+                except ValueError:
+                    self._add_lot_warning(record["LotNum"], "Reserve field not parsable as a number.")
+                    all_numeric = False
 
         return all_numeric
 
 
-    def _uppercase_lotnums(self, data: list):
+    @staticmethod
+    def _convert_numeric_to_int(data: list):
+        # determine which numeric fields are present in 'data'
+        integer_fields = ["LoEst", "HiEst", "StartBid", "Qty"]
+        for field in integer_fields:
+            if field not in data[0].keys():
+                integer_fields.remove(field)
+
+        # convert numeric fields from strings to integers
         for record in data:
-            record["LotNum"] = record["LotNum"].upper().strip()
+            for field in integer_fields:
+                record[field] = int(float(record[field]))
 
 
     def _process_startbids(self, data: list):
         """Calculates StartBids according to settings set by user.
         """
         for record in data:
-            try:
-                if self.calc_startbid:
-                    if self.calc_empty_startbids:   # calculate empty StartBid fields only
-                        if not record["StartBid"] or float(record["StartBid"]) < 5.00:   # if StartBid field is empty...
-                            record["StartBid"] = 0.5 * float(record["LoEst"])
-                    else:   # calculate all StartBids
+            if self.calc_startbid:
+                # calculate empty StartBid fields only
+                if self.calc_empty_startbids and "StartBid" in record.keys():
+                    if not record["StartBid"] or float(record["StartBid"]) < 5.00:   # if StartBid field is empty...
                         record["StartBid"] = 0.5 * float(record["LoEst"])
-            except KeyError:    # in case StartBid is not defined
-                pass
+                elif "LoEst" in record.keys():   # calculate all StartBids
+                    record["StartBid"] = 0.5 * float(record["LoEst"])
 
 
-    def _format_whitespace(self, data: list):
+    @staticmethod
+    def _format_whitespace(data: list):
         """Fixes whitespace irregularities in all records & fields of param 'data'.
 
         Replaces double+ spaces with single spaces and trims leading and trailing
@@ -280,10 +284,11 @@ class CSVProc:
             data: A list of dicts representing csv file rows.
 
         Raises:
-            KeyError: If any of the keys used are not present in dicts of 'data'.
+            KeyError: If any required keys are not present in dicts of 'data'.
             ValueError: If float() fails (call this function after _check_numeric_fields() ).
         """
         for record in data:
+            # checks for required fields
             if "  " in record["Desc"]:
                 self._add_lot_warning(record["LotNum"], "Double space found.")
             if not record["Desc"].endswith(('.', ')')):
@@ -294,124 +299,29 @@ class CSVProc:
                 self._add_lot_warning(record["LotNum"], "Description contains unprintable character(s).")
             if len(record["Title"]) > 60:
                 self._add_lot_warning(record["LotNum"], "Title longer than 60 characters.")
-            if float(record["LoEst"]) >= float(record["HiEst"]):
-                self._add_lot_warning(record["LotNum"], "Low estimate greater than or equal to high estimate.")
-            if float(record["LoEst"]) < 5.00 or float(record["HiEst"]) < 5.00 or float(record["StartBid"]) < 5.00:
-                self._add_lot_warning(record["LotNum"], "Lo/HiEst or StartBid is below $5.")
 
-            self._log_error_if(not record["Condition"].isprintable(), record, "Condition contains unprintable "
-                                                                           "character(s).")
-            self._log_error_if(not record["Condition"].isascii(), record, "Condition contains non-ASCII character(s).")
-            self._log_error_if(not record["Condition"].endswith(('.', ')')), record, "Condition ends with a character other than '.' or ')'.")
-            self._log_error_if(float(record["StartBid"]) > float(record["LoEst"]), record, "StartBid greater than low estimate.")
-            self._log_error_if(float(record["StartBid"]) > float(record["HiEst"]), record, "StartBid greater than "
+            # checks for optional fields
+            if "LoEst" in record.keys() and "HiEst" in record.keys():
+                if float(record["LoEst"]) >= float(record["HiEst"]):
+                    self._add_lot_warning(record["LotNum"], "Low estimate greater than or equal to high estimate.")
+                if float(record["LoEst"]) < 5.00 or float(record["HiEst"]) < 5.00 or float(record["StartBid"]) < 5.00:
+                    self._add_lot_warning(record["LotNum"], "Lo/HiEst or StartBid is below $5.")
+
+            if "Condition" in record.keys():
+                self._log_error_if(not record["Condition"].isprintable(), record, "Condition contains unprintable "
+                                                                               "character(s).")
+                self._log_error_if(not record["Condition"].isascii(), record, "Condition contains non-ASCII character(s).")
+                self._log_error_if(not record["Condition"].endswith(('.', ')')), record, "Condition ends with a character other than '.' or ')'.")
+
+            if "StartBid" in record.keys():
+                self._log_error_if(float(record["StartBid"]) > float(record["LoEst"]), record, "StartBid greater than low estimate.")
+                self._log_error_if(float(record["StartBid"]) > float(record["HiEst"]), record, "StartBid greater than "
                                                                                            "high estimate.")
 
 
-    @try_pass
     def _log_error_if(self, condition, curr_record, error_str):
         if condition:
             self._add_lot_warning(curr_record["LotNum"], error_str)
-
-
-    def _check_title_quantities(self, data: list):
-        """Attempts to check whether quantity in lot title matches value in the "Qty" field.
-
-        Args:
-            data (list[dict]): A list of dicts representing csv file rows.
-        """
-        eng_qtys = re.compile(r"\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b", re.IGNORECASE)
-        eng_ints = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
-                    "ten": 10, "eleven": 11, "twelve": 12}
-
-        for record in data:
-            try:
-                # look for spelled-out quantities
-                if re.search("^pair", record["Title"], re.IGNORECASE) and record["Qty"] != "2":
-                    self._add_lot_warning(record["LotNum"], "Title contains 'pair' but qty. is not 2.")
-                #TODO: add support for "lot of #" and "# pieces"
-
-                # sum numeric quantities in title
-                title_qtys = re.findall(r"\(\d+\)", record["Title"])
-                total_qty = 0
-                for q in title_qtys:
-                    total_qty += int(q)
-
-                # sum english quantities in title
-                title_eng_qtys = eng_qtys.findall(record["Title"])
-                for q in title_eng_qtys:
-                    total_qty += eng_ints[q]
-
-                if total_qty != float(record["Qty"]):
-                    self._add_lot_warning(record["LotNum"], "Possible mismatch between title & quantity.")
-            except KeyError:    # in case Qty is not defined
-                pass
-
-
-    def _generate_warning_log(self):
-        """Generates a logfile of lot warnings at location specified by self.dest_path.
-
-        Exports the contents of lot_warnings to a text file.
-        """
-        fname = "Export_warnings_" + self._get_timestamp() + ".txt"
-        path = os.path.join(self.dest_path, fname)
-
-        warning_count = self.count_warnings()
-        sorted_warnings = self._get_sorted_warnings()
-
-        with open(path, "w") as log_file:
-            log_file.write(80*'#' + '\n')
-            log_file.write(f"{C.PROGRAM_NAME}".center(80) + '\n')
-            log_file.write("~ Warnings ~".center(80) + '\n')
-            log_file.write(f"({warning_count} potential issues identified)".center(80) + '\n')
-            log_file.write(80*'#' + '\n\n')
-
-            timestamp = datetime.datetime.now().strftime("%H:%M:%S - %a %B %d, %Y")
-            log_file.write(f"{timestamp}\n\n")
-
-            for lot in sorted_warnings:
-                log_file.write(f"Lot {lot}  ".ljust(80, '-') + '\n')
-                for warning in sorted_warnings[lot]:
-                    log_file.write('   > ' + warning + '\n')
-
-                log_file.write('\n')
-
-
-    def _get_sorted_warnings(self) -> OrderedDict:
-        return OrderedDict(sorted(self.lot_warnings.items(), key=self._sort_value_with_alpha))
-
-
-    @staticmethod
-    def _sort_value_with_alpha(s) -> float:
-        """Sorts lot numbers by value, accounting for alpha-extensions (ex. lot 205A)
-
-        Args:
-            s: lot_warnings dictionary tuple
-
-        Returns:
-            float: value used to index sort
-        """
-        if s[0].isnumeric():
-            return float(s[0])
-        elif re.search("[a-z]$", s[0], re.IGNORECASE):
-            numeric_part = float(s[0][:-1])
-            letter_part = float(ord(s[0][-1].upper())) / 100.0
-            return numeric_part + letter_part
-        else:
-            return -1
-
-
-    def count_warnings(self) -> int:
-        """Counts and returns the total number of warnings issued (for all lots).
-        """
-        warning_count = 0
-        for lot in self.lot_warnings:
-            # TODO: verify this works
-            warning_count += len(lot)
-            # for _ in self.lot_warnings[lot]:
-            #     warning_count += 1
-
-        return warning_count
 
 
     def _split_lot_ext(self, data: list):
@@ -440,9 +350,124 @@ class CSVProc:
                     raise ValueError("Unexpected alpha character(s) in lot number.")
 
 
+    def _add_missing_export_headers(self, data: list):
+        dict_headers = data[0].keys()
+
+        for header in dict_headers:
+            if header not in self.export_file_headers:
+                if header == "LotExt":
+                    # insert header column for lot alpha-extensions immediately after LotNum column
+                    lot_num_index = self.export_file_headers.index("LotNum")
+                    self.export_file_headers.insert(lot_num_index + 1, header)
+                elif header == "StartBid":
+                    lot_num_index = self.export_file_headers.index("HiEst")
+                    self.export_file_headers.insert(lot_num_index + 1, header)
+                else:
+                    self.export_file_headers.append(header)
+
+
+    # this is in-progress/experimental... might finish it later
+    def _check_title_quantities(self, data: list):
+        """Attempts to check whether quantity in lot title matches value in the "Qty" field.
+
+        Args:
+            data (list[dict]): A list of dicts representing csv file rows.
+        """
+        eng_qtys = re.compile(r"\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b", re.IGNORECASE)
+        eng_ints = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+                    "ten": 10, "eleven": 11, "twelve": 12}
+
+        for record in data:
+            try:
+                # look for spelled-out quantities
+                if re.search("^pair", record["Title"], re.IGNORECASE) and record["Qty"] != "2":
+                    self._add_lot_warning(record["LotNum"], "Title contains 'pair' but qty. is not 2.")
+                # TODO: add support for "lot of #" and "# pieces"
+
+                # sum numeric quantities in title
+                title_qtys = re.findall(r"\(\d+\)", record["Title"])
+                total_qty = 0
+                for q in title_qtys:
+                    total_qty += int(q)
+
+                # sum english quantities in title
+                title_eng_qtys = eng_qtys.findall(record["Title"])
+                for q in title_eng_qtys:
+                    total_qty += eng_ints[q]
+
+                if total_qty != float(record["Qty"]):
+                    self._add_lot_warning(record["LotNum"], "Possible mismatch between title & quantity.")
+            except KeyError:    # in case Qty is not defined
+                pass
+
+
+    def _generate_warning_log(self):
+        """Generates a logfile of lot warnings at location specified by self.dest_path.
+
+        Exports the contents of lot_warnings to a text file.
+        """
+        filename = "Export_warnings_" + self._get_timestamp() + ".txt"
+        path = os.path.join(self.dest_path, filename)
+
+        warning_count = self.count_warnings()
+        sorted_warnings = self._get_sorted_warnings()
+
+        with open(path, "w") as log_file:
+            log_file.write(80*'#' + '\n')
+            log_file.write(f"{C.PROGRAM_NAME}".center(80) + '\n')
+            log_file.write("~ Warnings ~".center(80) + '\n')
+            log_file.write(f"({warning_count} potential issues identified)".center(80) + '\n')
+            log_file.write(80*'#' + '\n\n')
+
+            timestamp = datetime.datetime.now().strftime("%H:%M:%S - %a %B %d, %Y")
+            log_file.write(f"{timestamp}\n\n")
+
+            for lot in sorted_warnings:
+                log_file.write(f"Lot {lot}  ".ljust(80, '-') + '\n')
+                for warning in sorted_warnings[lot]:
+                    log_file.write('   > ' + warning + '\n')
+
+                log_file.write('\n')
+
+
+    def _get_sorted_warnings(self) -> OrderedDict:
+        return OrderedDict(sorted(self.lot_warnings.items(), key=self._sort_value_with_alpha))
+
+
+    @staticmethod
+    def _sort_value_with_alpha(s) -> float:
+        """Sorts lot numbers by value (ascending), accounting for alpha-extensions (ex. lot 205A)
+
+        Args:
+            s: lot_warnings dictionary tuple
+
+        Returns:
+            float: value used to index sort
+        """
+        dict_key = s[0]
+        if dict_key.isnumeric():
+            return float(dict_key)
+        elif re.search("[a-z]$", dict_key, re.IGNORECASE):
+            numeric_part = float(dict_key[:-1])
+            letter_part = float(ord(dict_key[-1].upper())) / 100.0
+            return numeric_part + letter_part
+        else:
+            return -1
+
+
+    def count_warnings(self) -> int:
+        """Counts and returns the total number of warnings issued (for all lots).
+        """
+        warning_count = 0
+        for lot in self.lot_warnings:
+            warning_count += len(self.lot_warnings[lot])
+
+        return warning_count
+
+
     def _export_invaluable(self, data: list, progress_callback, error_callback):
-        fname = "Invalu_Export_" + self._get_timestamp() + ".csv"
-        path = os.path.join(self.dest_path, fname)
+        filename = "Invalu_Export_" + self._get_timestamp() + ".csv"
+        path = os.path.join(self.dest_path, filename)
 
         # process data for upload to Invaluable
         self._uppercase_lotnums(data)
@@ -459,35 +484,21 @@ class CSVProc:
             progress_callback(23)
             self._split_lot_ext(data)
             progress_callback(26)
+            self._convert_numeric_to_int(data)
+            self._add_missing_export_headers(data)
             # self._check_title_quantities(data)
 
             # create header row (for ordering purposes)
-            inv_headers = []
-            for h in self.export_file_headers:
-                try:
-                    inv_headers.append(self.inv_headers[h])
-                except KeyError:
-                    # ignore AF headers not supported by Invaluable
-                    pass
-
+            exp_headers = [self.inv_headers[h] for h in self.export_file_headers if h in self.inv_headers]
             progress_callback(29)
-            # insert header column for lot alpha-extensions
-            lot_num_index = inv_headers.index("Lot Number")
-            inv_headers.insert(lot_num_index + 1, "Lot Ext")
 
             with open(path, "w", newline="") as inv_file:
-                writer = csv.DictWriter(inv_file, inv_headers)
+                writer = csv.DictWriter(inv_file, exp_headers)
                 writer.writeheader()
                 for line in data:
                     # map AFlex header keys to Invaluable header keys
-                    new_line = {}
-                    for key, val in line.items():
-                        try:
-                            new_line[self.inv_headers[key]] = val
-                        except KeyError:
-                            # ignore AF headers not supported by Invaluable
-                            pass
-
+                    new_line = {self.inv_headers[key]: val for (key, val) in line.items() if key in
+                                self.inv_headers.keys()}
                     writer.writerow(new_line)
 
         else:
@@ -495,8 +506,8 @@ class CSVProc:
 
 
     def _export_liveauctioneers(self, data: list, progress_callback, error_callback):
-        fname = "LiveAuc_Export_" + self._get_timestamp() + ".csv"
-        path = os.path.join(self.dest_path, fname)
+        filename = "LiveAuc_Export_" + self._get_timestamp() + ".csv"
+        path = os.path.join(self.dest_path, filename)
 
         # process data for upload to LiveAuctioneers
         self._uppercase_lotnums(data)
@@ -510,33 +521,22 @@ class CSVProc:
             self._format_whitespace(data)
             progress_callback(60)
             self._find_errors(data)
+            self._add_missing_export_headers(data)
             progress_callback(63)
             # self._check_title_quantities(data)
 
             # create header row (for ordering purposes)
-            la_headers = []
-            for h in self.export_file_headers:
-                try:
-                    la_headers.append(self.la_headers[h])
-                except KeyError:
-                    # ignore AF headers not supported by LiveAuctioneers
-                    pass
+            exp_headers = [self.la_headers[h] for h in self.export_file_headers if h in self.la_headers]
 
             progress_callback(66)
 
             with open(path, "w", newline="") as la_file:
-                writer = csv.DictWriter(la_file, la_headers)
+                writer = csv.DictWriter(la_file, exp_headers)
                 writer.writeheader()
                 for line in data:
                     # map AFlex header keys to LA header keys
-                    new_line = {}
-                    for key, val in line.items():
-                        try:
-                            new_line[self.la_headers[key]] = val
-                        except KeyError:
-                            # ignore AF headers not supported by LiveAuctioneers
-                            pass
-
+                    new_line = {self.la_headers[key]: val for (key, val) in line.items() if key in
+                                self.la_headers.keys()}
                     writer.writerow(new_line)
 
         else:
@@ -573,9 +573,9 @@ class CSVProc:
         progress_callback(90)
 
         # generate warning log as necessary
-        if self.count_warnings() > 0:
+        num_warnings = self.count_warnings()
+        if num_warnings > 0:
             self._generate_warning_log()
-            num_warnings = self.count_warnings()
             result_callback(f"{num_warnings} warnings generated; check log file")
 
         # setting progressbar value to 99+ makes it appear full (whereas 100 looks empty)
