@@ -17,7 +17,7 @@
 
 # PROGRAM CONSTANTS
 class C:
-    PROGRAM_NAME = "AF .csv Processor v1.0"
+    PROGRAM_NAME = "AF .csv Processor v1.0.0"
 
 
 # Config file dictionary keys
