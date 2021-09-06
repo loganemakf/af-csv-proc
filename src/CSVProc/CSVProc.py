@@ -47,7 +47,7 @@ class CSVProc:
         # configuration options (user-configured in SettingsWindow)
         self.using_bp_condition = False
         self.bp_condition = ""  # text to substitute for every lot's "Condition" field if using_bp_condition == True
-        self.calc_startbid = False
+        self.calc_startbids = False
         self.calc_empty_startbids = False
 
 
@@ -312,7 +312,7 @@ class CSVProc:
         """Calculates StartBids according to settings set by user.
         """
         for record in data:
-            if self.calc_startbid:
+            if self.calc_startbids:
                 # calculate empty StartBid fields only
                 if self.calc_empty_startbids and "StartBid" in record.keys():
                     if not record["StartBid"] or float(record["StartBid"]) < 5.00:   # if StartBid field is empty...
