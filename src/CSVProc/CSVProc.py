@@ -186,6 +186,8 @@ class CSVProc:
 
     def _check_required_columns(self, data: list, required_cols: list):
         """Verifies that each record in dict 'data' contains all the keys in list 'required_cols'.
+        A missing 'StartBid' column is ignored if the processor is set to calculate start bids
+        (but not empty start bids).
 
         Args:
             data: A list of dicts representing csv file rows.
@@ -197,7 +199,8 @@ class CSVProc:
         for header in required_cols:
             for record in data:
                 if header not in record.keys():
-                    raise RuntimeError(f"Required column '{header}' not found for lot.")
+                    if not (header == "StartBid" and self.calc_startbids and not self.calc_empty_startbids):
+                        raise RuntimeError(f"Required column '{header}' not found for lot.")
 
 
     def _process_conditions(self, data: list):
@@ -311,13 +314,14 @@ class CSVProc:
     def _convert_numeric_to_int(data: list):
         # determine which numeric fields are present in 'data'
         integer_fields = ["LoEst", "HiEst", "StartBid", "Qty"]
+        present_int_fields = []
         for field in integer_fields:
-            if field not in data[0].keys():
-                integer_fields.remove(field)
+            if field in data[0].keys():
+                present_int_fields.append(field)
 
         # convert numeric fields from strings to integers
         for record in data:
-            for field in integer_fields:
+            for field in present_int_fields:
                 record[field] = int(float(record[field]))
 
 
@@ -381,8 +385,9 @@ class CSVProc:
             if "LoEst" in record.keys() and "HiEst" in record.keys():
                 if float(record["LoEst"]) >= float(record["HiEst"]):
                     self._add_lot_warning(record["LotNum"], "Low estimate greater than or equal to high estimate.")
-                if float(record["LoEst"]) < 5.00 or float(record["HiEst"]) < 5.00 or float(record["StartBid"]) < 5.00:
-                    self._add_lot_warning(record["LotNum"], "Lo/HiEst or StartBid is below $5.")
+                if float(record["LoEst"]) < 10.00 or float(record["HiEst"]) < 10.00 or \
+                        float(record.get("StartBid", float(record["LoEst"]) / 2.0)) < 5.00:
+                    self._add_lot_warning(record["LotNum"], "Lo/HiEst is below $10 or StartBid is below $5.")
 
             if "Condition" in record.keys():
                 self._log_error_if(not record["Condition"].isprintable(), record, "Condition contains unprintable "
