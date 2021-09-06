@@ -171,6 +171,22 @@ class CSVProc:
             self.export_file_headers.remove(f"Desc. {i}")
 
 
+    def _check_required_columns(self, data: list, required_cols: list):
+        """Verifies that each record in dict 'data' contains all the keys in list 'required_cols'.
+
+        Args:
+            data: A list of dicts representing csv file rows.
+            required_cols: A list of dict keys (column headers) required for this data.
+
+        Raises:
+            RuntimeError: If a required header is missing from any lot.
+        """
+        for header in required_cols:
+            for record in data:
+                if header not in record.keys():
+                    raise RuntimeError(f"Required column '{header}' not found for lot.")
+
+
     def _process_conditions(self, data: list):
         """Handles condition report truncation warning & boilerplate condition report substitution.
         """
@@ -228,6 +244,54 @@ class CSVProc:
                     all_numeric = False
 
         return all_numeric
+
+
+    def _check_related_columns(self, data: list):
+        """Checks that related columns exist and, when one of a pair is filled in, the other is as well.
+        Logs warnings as appropriate.
+
+        Args:
+            data: A list of dicts representing csv file rows.
+        """
+        first_record = data[0]
+        # if H, W, or D are defined, dimension unit should also be defined (and vice-versa)
+        if any([field for field in ("Height", "Width", "Depth") if field in first_record.keys()]):
+            if "DimUnit" not in first_record.keys():
+                self._add_lot_warning("0", "H/W/D column(s) defined but co-requisite Dim[ension]Unit column is not.")
+            else:
+                # check all records with H/W/D defined for blank DimUnit fields
+                for record in data:
+                    if any([record[field] for field in ("Height", "Width", "Depth") if field in record.keys()]) and not record["DimUnit"]:
+                        self._add_lot_warning(record["LotNum"], "Missing dimension unit.")
+        elif "DimUnit" in first_record.keys():
+            if not any([field for field in ("Height", "Width", "Depth") if field in first_record.keys()]):
+                self._add_lot_warning("0", "DimUnit column defined but co-requisite H/W/D column(s) are not.")
+
+        # if Weight is defined, weight unit should be as well (and vice-versa)
+        if "Weight" in first_record.keys():
+            if "WtUnit" not in first_record.keys():
+                self._add_lot_warning("0", "Weight column defined but co-requisite W[eigh]tUnit column is not.")
+            else:
+                # check all records with Weight defined for blank WtUnit fields
+                for record in data:
+                    if record["Weight"] and not record["WtUnit"]:
+                        self._add_lot_warning(record["LotNum"], "Missing weight unit.")
+        elif "WtUnit" in first_record.keys():
+            if "Weight" not in first_record.keys():
+                self._add_lot_warning("0", "WtUnit column defined but co-requisite Weight column is not.")
+
+        # if Consignor is defined, Ref# should be as well (and vice-versa)
+        if "Consign#" in first_record.keys():
+            if "Ref#" not in first_record.keys():
+                self._add_lot_warning("0", "Consign# column defined but co-requisite Ref# column is not.")
+            else:
+                # check all records with Consign# defined for blank Ref# fields
+                for record in data:
+                    if record["Consign#"] and not record["Ref#"]:
+                        self._add_lot_warning(record["LotNum"], "Missing consignor lot reference number.")
+        elif "Ref#" in first_record.keys():
+            if "Consign#" not in first_record.keys():
+                self._add_lot_warning("0", "Ref# column defined but co-requisite Consign# column is not.")
 
 
     @staticmethod
@@ -469,10 +533,18 @@ class CSVProc:
         filename = "Invalu_Export_" + self._get_timestamp() + ".csv"
         path = os.path.join(self.dest_path, filename)
 
+        # verify that required fields are all present
+        try:
+            self._check_required_columns(data, self.required_headers_inv)
+        except RuntimeError as e:
+            error_callback("Invaluable export error: " + str(e))
+            raise e
+
         # process data for upload to Invaluable
         self._uppercase_lotnums(data)
         progress_callback(8)
         if self._check_numeric_fields(data):
+            self._check_related_columns(data)
             progress_callback(11)
             self._process_conditions(data)
             progress_callback(14)
@@ -509,10 +581,18 @@ class CSVProc:
         filename = "LiveAuc_Export_" + self._get_timestamp() + ".csv"
         path = os.path.join(self.dest_path, filename)
 
+        # verify that required fields are all present
+        try:
+            self._check_required_columns(data, self.required_headers_la)
+        except RuntimeError as e:
+            error_callback("LiveAuctioneers export error: " + str(e))
+            raise e
+
         # process data for upload to LiveAuctioneers
         self._uppercase_lotnums(data)
         progress_callback(48)
         if self._check_numeric_fields(data):
+            self._check_related_columns(data)
             progress_callback(51)
             self._process_conditions(data)
             progress_callback(54)
@@ -566,17 +646,20 @@ class CSVProc:
         la_data = copy.deepcopy(self.data)
         progress_callback(5)
 
-        # process and export the catalog for upload to both bidding platforms
-        self._export_invaluable(inv_data, progress_callback, result_callback)
-        progress_callback(45)
-        self._export_liveauctioneers(la_data, progress_callback, result_callback)
-        progress_callback(90)
+        try:
+            # process and export the catalog for upload to both bidding platforms
+            self._export_invaluable(inv_data, progress_callback, result_callback)
+            progress_callback(45)
+            self._export_liveauctioneers(la_data, progress_callback, result_callback)
+            progress_callback(90)
 
-        # generate warning log as necessary
-        num_warnings = self.count_warnings()
-        if num_warnings > 0:
-            self._generate_warning_log()
-            result_callback(f"{num_warnings} warnings generated; check log file")
+            # generate warning log as necessary
+            num_warnings = self.count_warnings()
+            if num_warnings > 0:
+                self._generate_warning_log()
+                result_callback(f"{num_warnings} warnings generated; check log file")
 
-        # setting progressbar value to 99+ makes it appear full (whereas 100 looks empty)
-        progress_callback(99.99)
+            # setting progressbar value to 99+ makes it appear full (whereas 100 looks empty)
+            progress_callback(99.99)
+        except RuntimeError:
+            progress_callback(0.0)
