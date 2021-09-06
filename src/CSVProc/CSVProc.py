@@ -313,7 +313,7 @@ class CSVProc:
     @staticmethod
     def _convert_numeric_to_int(data: list):
         # determine which numeric fields are present in 'data'
-        integer_fields = ["LoEst", "HiEst", "StartBid", "Qty"]
+        integer_fields = ["LoEst", "HiEst", "StartBid"]
         present_int_fields = []
         for field in integer_fields:
             if field in data[0].keys():
@@ -429,7 +429,7 @@ class CSVProc:
                     record["LotNum"] = lot_num[:-1]
                 else:
                     self._add_lot_warning(lot_num, "Lot number contains non-terminating A-Z character(s).")
-                    raise ValueError("Unexpected alpha character(s) in lot number.")
+                    raise ValueError(f"Unexpected alpha character(s) in lot {lot_num}.")
 
 
     def _add_missing_export_headers(self, data: list):
@@ -681,3 +681,5 @@ class CSVProc:
             progress_callback(99.99)
         except RuntimeError:
             progress_callback(0.0)
+        except ValueError as e:
+            result_callback(f"Export error: {e}")
