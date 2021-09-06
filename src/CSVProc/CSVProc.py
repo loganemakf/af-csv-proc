@@ -683,3 +683,4 @@ class CSVProc:
             progress_callback(0.0)
         except ValueError as e:
             result_callback(f"Export error: {e}")
+            progress_callback(0.0)
