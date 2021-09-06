@@ -39,8 +39,11 @@ class SettingsWindow:
         self.unused_headers = self.processor.af_headers
         self.used_headers = set()
         self.processor.src_path = self.source_path
-
         self._populate_table()
+
+        # local copy of checkbox settings (in case user decides not to save)
+        self.calc_startbids = False
+        self.calc_empty_startbids = False
 
         # load settings from previously opened settings window and/or "sticky"
         # configuration settings from config.json file.
@@ -58,9 +61,12 @@ class SettingsWindow:
         height = self.window.winfo_reqheight()
         ws = self.window.winfo_screenwidth()
         hs = self.window.winfo_screenheight()
-        x = (ws / 2) - width - 200
-        y = (hs / 2) - (height / 2)
+        # x = (ws / 2) - width - 200
+        x = 300
+        # y = (hs / 2) - (height / 2)
+        y = (hs / 2) - 200
         self.window.geometry("+%d+%d" % (x, y))
+        # self.window.geometry("%dx%d+%d+%d" % (width, height, x, y))
 
         self.main_frame = ttk.Frame(self.window, padding="10 5")
         self.main_frame.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -150,17 +156,17 @@ class SettingsWindow:
     def _calc_startbid_toggled(self):
         if self.calc_startbid_var.get() == "yes":
             self.calc_empty_startbids_chkbx['state'] = 'normal'
-            self.processor.calc_startbid = True
+            self.calc_startbids = True
         else:
             self.calc_empty_startbids_chkbx['state'] = 'disabled'
-            self.processor.calc_startbid = False
+            self.calc_startbids = False
 
 
     def _calc_empty_startbids_toggled(self):
         if self.calc_startbid_var.get() == "yes" and self.calc_empty_startbids_var.get() == "yes":
-            self.processor.calc_empty_startbids = True
+            self.calc_empty_startbids = True
         else:
-            self.processor.calc_empty_startbids = False
+            self.calc_empty_startbids = False
 
 
     def _populate_table(self):
@@ -284,22 +290,24 @@ class SettingsWindow:
             self._display_errorbox("Error: mismatch between table and processor column counts.")
             return False
         elif len(table_headers) != 0:
-            h = 0
             for c in range(self.processor.file_num_cols):
-                self.table.heading(c, text=table_headers[h])
-                h += 1
+                self.table.heading(c, text=table_headers[c])
 
         # load up a local copy of stored config data
-        with open(self.settings_filename, 'r') as sf:
-            config_data = json.load(sf)
+        try:
+            with open(self.settings_filename, 'r') as sf:
+                config_data = json.load(sf)
+        except OSError:
+            # config file likely doesn't exist
+            return False
 
         try:
             # enable condition text box for a moment in order to insert loaded boilerplate condition text
             self.condition_report_txt['state'] = 'normal'
-            self.condition_report_txt.insert(1.0, config_data["bp_condition"])
+            self.condition_report_txt.insert(1.0, config_data[CONF.BP_COND])
 
             # convert boolean from config file to "yes"/"no" for checkbox variable
-            if config_data["using_bp_condition"]:
+            if config_data[CONF.USING_BP_COND]:
                 self.using_bp_cond_str.set("yes")
                 self._boiler_cond_toggled()
             else:
@@ -307,8 +315,22 @@ class SettingsWindow:
                 self._boiler_cond_toggled()
         except KeyError:
             # config file not what we expected?
-            self._display_errorbox("Error loading config file: key not found.")
+            self._display_errorbox("Error loading config file: BPcondition key not found.")
             return False
+
+        if self.processor.calc_startbids == True:
+            self.calc_startbid_var.set("yes")
+            self._calc_startbid_toggled()
+        else:
+            self.calc_startbid_var.set("no")
+            self._calc_startbid_toggled()
+
+        if self.processor.calc_empty_startbids == True:
+            self.calc_empty_startbids_var.set("yes")
+            self._calc_empty_startbids_toggled()
+        else:
+            self.calc_empty_startbids_var.set("no")
+            self._calc_empty_startbids_toggled()
 
         # indicate successful settings load to the caller
         return True
@@ -336,6 +358,8 @@ class SettingsWindow:
         # set processor member vars to local values
         self.processor.using_bp_condition = using_bp_cond_bool
         self.processor.bp_condition = self.get_bp_condition_text()
+        self.processor.calc_startbids = self.calc_startbids
+        self.processor.calc_empty_startbids = self.calc_empty_startbids
 
         # additionally, save reusable settings to config file (for next time)
         config_data = {CONF.USING_BP_COND: using_bp_cond_bool,
