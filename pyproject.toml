@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auctionfix"
+version = "2.0.0.dev0"
+description = "Post-processor for AuctionFlex catalog exports: fixes common issues and writes upload files for bidding platforms"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.12"
+dependencies = ["pylabels", "reportlab"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+auctionfix = "auctionfix.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["auctionfix*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

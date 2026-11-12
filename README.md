@@ -1,49 +1,58 @@
-# af-csv-proc
+# AuctionFix
 
 ## A post-processor for AuctionFlex-exported catalog files.
 ***
 
-![af csv proc main window](/../screenshots/img/mainwindow_1.0_half.png?raw=true)
-![af csv proc settings window](/../screenshots/img/settingswindow_1.0_half.png?raw=true)
+![af csv proc main window](/screenshots/img/mainwindow_1.0.png?raw=true)
 
-af-csv-proc is a Python program that processes an auction catalog .csv file for upload to third-party bidding 
+AuctionFix is a Python program that processes an auction catalog (AuctionFlex XML or .csv export) for upload to third-party bidding 
 platforms such as LiveAuctioneers and Invaluable. It attempts to correct a number of issues present in catalog files 
 introduced during export from AuctionFlex (including lot descriptions split into 5 fields, fields truncated, etc.) as 
 well as issues caused by human error in the cataloging process (including extraneous whitespace, inconsistent 
 punctuation, numerical value errors, etc.).
 
 #### Requirements
-* Python 3.9+ (may work on earlier versions but that hasn't been tested)
+* Python 3.12+
     * The latest release of Python from [python.org](https://www.python.org) is recommended as it also 
       includes the most up-to-date version of Tk.
-* As af-exp-csv is built using Python and tkinter, it is cross-platform and should work on macOS, Windows, & Linux.
+* As AuctionFix is built using Python and tkinter, it is cross-platform and should work on macOS, Windows, & Linux.
 
 ***
 ### Getting Started
-Clone or download this repo, then run `python3 main.py` in your terminal to launch the GUI.
+Clone or download this repo, install it with `pip install -e .`, then either:
+* run `python3 main.py` to launch the GUI (for .csv exports), or
+* process an XML export from the command line:
 
-A sample workflow might look something like the following:
+      auctionfix process Auction_26.xml -o exports/ --settings config.json
+
+  This writes the Invaluable and LiveAuctioneers upload files and a warning log. Add `--labels` to also make a PDF of
+  lot labels (estimates are shown unless `--no-estimates` is given).
+
+#### Labels
+AuctionFix includes one example label layout for Avery 5160 address labels (`--label-layout avery5160`). Other
+packages can add layouts of their own: see `auctionfix/labels/core.py`. `auctionfix layouts` lists those installed.
+
+A sample .csv workflow might look something like the following:
+
 1.  **Export auction from AuctionFlex (Auction Lots & Preview Images > Export).**
     
     If your catalog is complex (or has seldom-used fields), make note of the field export order; you'll use 
-      this later to tell af-csv-proc what data each column contains. *Make sure to select "Comma Delimited Text File .
+      this later to tell AuctionFix what data each column contains. *Make sure to select "Comma Delimited Text File .
     CSV" in the File Type section of AuctionFlex's export UI.*
-2.  **Run af-csv-proc; click "Browse" and select catalog .csv file.**
+2.  **Run AuctionFix; click "Browse" and select catalog .csv file.**
 3.  **Open settings window & label table columns according to their contents.**
 4.  **Save settings; click "Process" button to select an output directory.**
     
     Exported catalog files and a warning log will be saved to this directory. An empty directory is recommended as 
-    af-csv-proc does not currently have any protection against overwriting existing files.
-5.  **After confirming a directory, af-csv-proc will process the catalog file and display a popup indicating 
+    AuctionFix does not currently have any protection against overwriting existing files.
+5.  **After confirming a directory, AuctionFix will process the catalog file and display a popup indicating 
     success or failure upon completion (usually quite fast).**
-6.  **Even if af-csv-proc succeeds, it is critical that the user check the warning log to identify issues not 
+6.  **Even if AuctionFix succeeds, it is critical that the user check the warning log to identify issues not 
     automatically corrected during processing.**
     
-    As an example, af-csv-proc checks whether a lot's description ends with either a '.' or ')' character. While the 
+    As an example, AuctionFix checks whether a lot's description ends with either a '.' or ')' character. While the 
     absence of one of these characters is a minor punctuation issue on its own, it can also indicate that a 
     description has been truncated mid-sentence during export from AuctionFlex (which is far more serious).
-    
-A short sample AuctionFlex catalog file, `catalog_sample.csv`, is provided in the root of this repository.
 ***
 ### Background
 The process of uploading an auction catalog created in AuctionFlex to a third-party internet bidding platform 

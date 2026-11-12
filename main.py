@@ -1,5 +1,5 @@
 # main.py
-# af-csv-proc - Post-processor for exported auction catalogs
+# AuctionFix - post-processor for exported auction catalogs
 # Copyright (C) 2021  Logan Foster
 #
 # This program is free software: you can redistribute it and/or modify
@@ -18,11 +18,39 @@
 # Run this file ("python3 main.py") to launch the GUI
 
 import tkinter as tk
-from src.GUI.MainWindow import MainWindow
-from src.CSVProc.CSVProc import CSVProc
+from auctionfix.gui.MainWindow import MainWindow
+from auctionfix.processor.csv_proc import CSVProc
 
+if __name__ == "__main__":
+    af_file_headers = [
+        "LotNum",
+        "Title",
+        "Desc. 1",
+        "Desc. 2",
+        "Desc. 3",
+        "Desc. 4",
+        "Desc. 5",
+        "Qty",
+        "LoEst",
+        "HiEst",
+        "StartBid",
+        "Reserve",
+        "Condition",
+        "Consign#",
+        "[Ignore]",
+        "[Ignore]",
+        "[Ignore]",
+        "Ref#",
+        "Height",
+        "Width",
+        "Depth",
+        "DimUnit",
+        "Weight",
+        "WtUnit",
+        "Inv#",
+    ]
 
-if __name__ == '__main__':
     root = tk.Tk()
     processor = CSVProc()
+    processor.file_headers = af_file_headers
     app = MainWindow(root, processor)
